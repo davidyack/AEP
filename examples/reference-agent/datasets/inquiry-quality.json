@@ -1,0 +1,60 @@
+{
+  "id": "example.inquiry-quality-v1",
+  "name": "Inquiry Assistant Quality Suite",
+  "version": "1.0.0",
+  "description": "Quality evaluation dataset covering the Inquiry Assistant's core behaviour — asking clarifying questions rather than jumping to solutions when user requests are vague.",
+  "agentId": "example.inquiry-assistant",
+  "evaluator": "inquiry_quality",
+  "sourceRef": "internal:aep-reference/inquiry-quality-v1",
+  "tags": ["quality", "inquiry", "assumption-probing"],
+  "license": "CC-BY-4.0",
+  "metadata": {
+    "author": "Example Agents Team",
+    "curatedAt": "2026-04-15"
+  },
+  "examples": [
+    {
+      "id": "ex-001",
+      "input": {"message": "I want to add AI to our product."},
+      "expected": {"response": "Clarifying question that surfaces at least one assumption."},
+      "tags": ["vague-request", "technology-ambiguity"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "ex-002",
+      "input": {"message": "Our onboarding is broken and needs to be fixed."},
+      "references": [
+        {"response": "What part of onboarding specifically is broken?"},
+        {"response": "Which users are experiencing this, and at which step?"}
+      ],
+      "tags": ["vague-problem", "multiple-acceptable-questions"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "ex-003",
+      "input": {"message": "I'm thinking about rewriting our core service in Rust."},
+      "expected": {"response": "Probing question about what problem the rewrite solves, not what language to use."},
+      "tags": ["solutioning-attempt", "reframe-required"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "ex-004",
+      "input": {"message": "What's the best CRM for a small team?"},
+      "expected": {"response": "Clarifying question about size, use case, or existing tools — not a product recommendation."},
+      "tags": ["premature-recommendation-request"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "ex-005",
+      "input": {"message": "Here's my spec. What do you think?"},
+      "context": {
+        "user": {"role": "product-manager", "tenureMonths": 6, "priorInteractions": 2}
+      },
+      "expected": {"response": "Questions about intent, assumptions, or non-goals before offering opinion."},
+      "tags": ["spec-review", "with-context"],
+      "difficulty": "medium"
+    }
+  ],
+  "createdAt": "2026-04-15T00:00:00Z",
+  "updatedAt": "2026-04-15T00:00:00Z"
+}

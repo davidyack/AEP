@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/finding.schema.json",
+  "title": "Finding",
+  "description": "A structured observation from an evaluation run.",
+  "type": "object",
+  "required": ["findingId", "category", "severity", "observedBehavior", "expectedBehavior", "evidenceRefs"],
+  "properties": {
+    "findingId": {"type": "string"},
+    "runId": {"type": "string", "description": "The evaluation run that produced this finding."},
+    "scenarioId": {"type": "string"},
+    "agentId": {"type": "string"},
+    "agentVersion": {"type": "string"},
+    "category": {"enum": ["safety", "quality", "security", "rai", "performance", "compliance", "robustness"]},
+    "severity": {"enum": ["low", "medium", "high", "critical"]},
+    "observedBehavior": {"type": "string"},
+    "expectedBehavior": {"type": "string"},
+    "evidenceRefs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/EvidencePointer"},
+      "minItems": 1,
+      "description": "Typed pointers into artifacts. Not opaque strings."
+    },
+    "reproducible": {
+      "type": "object",
+      "properties": {
+        "canReproduce": {"type": "boolean"},
+        "frequency": {"type": "number", "minimum": 0, "maximum": 1, "description": "Fraction of runs on which this finding reproduces."},
+        "sampleSize": {"type": "integer", "minimum": 1}
+      }
+    },
+    "policyRefs": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Rule IDs this finding relates to."
+    },
+    "triage": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["open", "acknowledged", "fixing", "wont-fix", "resolved", "duplicate"]},
+        "assignee": {"type": "string"},
+        "notes": {"type": "string"}
+      }
+    },
+    "createdAt": {"type": "string", "format": "date-time"},
+    "createdBy": {"type": "string", "description": "Evaluator identity (human or automated)."}
+  },
+  "$defs": {
+    "EvidencePointer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "traceRef", "turnIndex"],
+          "properties": {
+            "type": {"const": "trace-turn"},
+            "traceRef": {"type": "string"},
+            "turnIndex": {"type": "integer", "minimum": 0}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "traceRef", "turnIndex", "toolCallId"],
+          "properties": {
+            "type": {"const": "tool-call"},
+            "traceRef": {"type": "string"},
+            "turnIndex": {"type": "integer", "minimum": 0},
+            "toolCallId": {"type": "string"}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "traceRef", "turnIndex", "policyEventId"],
+          "properties": {
+            "type": {"const": "policy-event"},
+            "traceRef": {"type": "string"},
+            "turnIndex": {"type": "integer", "minimum": 0},
+            "policyEventId": {"type": "string"}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "uri"],
+          "properties": {
+            "type": {"const": "external"},
+            "uri": {"type": "string", "format": "uri"},
+            "description": {"type": "string"}
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/stream-event.schema.json",
+  "title": "StreamEvent",
+  "description": "Envelope for events emitted on the SSE stream GET /aep/sessions/{id}/events. Optional extension (AEP-REQ-064). Events applied in id order to an empty trace produce content equivalent to the sealed Trace (AEP-REQ-069).",
+  "type": "object",
+  "required": ["id", "event", "data"],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonically increasing sequence number per session. Used for Last-Event-ID resume."
+    },
+    "event": {
+      "type": "string",
+      "description": "Event type. Registered types below; vendor extensions MUST use reverse-DNS prefixes."
+    },
+    "data": {
+      "description": "Type-specific payload. See per-type schemas in $defs."
+    },
+    "traceEventRef": {
+      "type": "string",
+      "description": "Pointer to the Trace entry this event projects. Required for all events except stream.heartbeat and stream.end (AEP-REQ-069). Form: 'turns[n]', 'turns[n].reasoning[m]', 'turns[n].toolCalls[m]', 'turns[n].policyEvents[m]', or a session-level pointer like 'finalOutcome' or 'injectedContext'."
+    },
+    "traceSeq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic ordering hook corresponding to position in the sealed Trace (AEP-REQ-115). Events for the same Trace entry share a traceSeq; events MAY arrive out of wall-clock order across turns but MUST be in traceSeq order within a single turn."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Server-emitted wall-clock time of the event."
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/SessionStarted"},
+    {"$ref": "#/$defs/TurnStarted"},
+    {"$ref": "#/$defs/TurnReasoning"},
+    {"$ref": "#/$defs/ToolInvoked"},
+    {"$ref": "#/$defs/ToolCompleted"},
+    {"$ref": "#/$defs/PolicyEvent"},
+    {"$ref": "#/$defs/TurnCompleted"},
+    {"$ref": "#/$defs/SessionEvaluated"},
+    {"$ref": "#/$defs/SessionError"},
+    {"$ref": "#/$defs/StreamHeartbeat"},
+    {"$ref": "#/$defs/StreamEnd"},
+    {"$ref": "#/$defs/VendorEvent"}
+  ],
+  "$defs": {
+    "SessionStarted": {
+      "type": "object",
+      "properties": {
+        "event": {"const": "session.started"},
+        "data": {
+          "type": "object",
+          "required": ["sessionId", "agentId", "agentVersion", "testMode", "startedAt"],
+          "properties": {
+            "sessionId": {"type": "string"},
+            "agentId": {"type": "string"},
+            "agentVersion": {"type": "string"},
+            "testMode": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
+            "startedAt": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    },
+    "TurnStarted": {
+      "type": "object",
+      "properties": {
+        "event": {"const": "turn.started"},
+        "data": {
+          "type": "object",
+          "required": ["turnId", "turnIndex", "startedAt"],
+          "properties": {
+            "turnId": {"type": "string"},
+            "turnIndex": {"type": "integer", "minimum": 0},
+            "input": {"description": "Turn input. May be omitted in blackbox mode."},
+            "startedAt": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    },
+    "TurnReasoning": {
+      "type": "object",
+      "description": "Emitted only when traceabilityContract.reasoning is 'step-by-step' or 'full' and mode is toolbox+.",
+      "properties": {
+        "event": {"const": "turn.reasoning"},
+        "data": {
+          "type": "object",
+          "required": ["turnId", "step"],
+          "properties": {
+            "turnId": {"type": "string"},
+            "step": {"type": "integer", "minimum": 0},
+            "content": {"type": "string"}
+          }
+        }
+      }
+    },
+    "ToolInvoked": {
+      "type": "object",
+      "description": "Emitted in toolbox+ mode when the agent dispatches a tool call.",
+      "properties": {
+        "event": {"const": "tool.invoked"},
+        "data": {
+          "type": "object",
+          "required": ["turnId", "toolCallId", "toolName"],
+          "properties": {
+            "turnId": {"type": "string"},
+            "toolCallId": {"type": "string"},
+            "toolName": {"type": "string"},
+            "arguments": {"description": "Tool-specific argument object. Subject to mode visibility."}
+          }
+        }
+      }
+    },
+    "ToolCompleted": {
+      "type": "object",
+      "properties": {
+        "event": {"const": "tool.completed"},
+        "data": {
+          "type": "object",
+          "required": ["turnId", "toolCallId", "latencyMs"],
+          "properties": {
+            "turnId": {"type": "string"},
+            "toolCallId": {"type": "string"},
+            "result": {"description": "Tool-specific return value, or null if errored."},
+            "error": {"type": "string"},
+            "latencyMs": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "PolicyEvent": {
+      "type": "object",
+      "description": "Emitted in policybox+ mode when a policy rule triggers.",
+      "properties": {
+        "event": {"const": "policy.event"},
+        "data": {
+          "type": "object",
+          "required": ["turnId", "policyEventId", "ruleId", "outcome"],
+          "properties": {
+            "turnId": {"type": "string"},
+            "policyEventId": {"type": "string"},
+            "ruleId": {"type": "string"},
+            "outcome": {"enum": ["passed", "warned", "refused", "redacted", "escalated", "logged", "inferred-refusal"]},
+            "severity": {"enum": ["low", "medium", "high", "critical"]}
+          }
+        }
+      }
+    },
+    "TurnCompleted": {
+      "type": "object",
+      "properties": {
+        "event": {"const": "turn.completed"},
+        "data": {
+          "type": "object",
+          "required": ["turnId", "latencyMs"],
+          "properties": {
+            "turnId": {"type": "string"},
+            "output": {"description": "Turn output. Shape matches agent outputSchema."},
+            "latencyMs": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "SessionEvaluated": {
+      "type": "object",
+      "properties": {
+        "event": {"const": "session.evaluated"},
+        "data": {
+          "type": "object",
+          "required": ["sessionId", "resultRef"],
+          "properties": {
+            "sessionId": {"type": "string"},
+            "resultRef": {"type": "string"}
+          }
+        }
+      }
+    },
+    "SessionError": {
+      "type": "object",
+      "properties": {
+        "event": {"const": "session.error"},
+        "data": {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": {"type": "integer"},
+            "message": {"type": "string"},
+            "turnId": {"type": "string", "description": "Present if the error is turn-scoped."}
+          }
+        }
+      }
+    },
+    "StreamHeartbeat": {
+      "type": "object",
+      "description": "Keepalive. Carries no session state change. Required every ≤30s (AEP-REQ-066).",
+      "properties": {
+        "event": {"const": "stream.heartbeat"},
+        "data": {
+          "type": "object",
+          "required": ["timestamp"],
+          "properties": {
+            "timestamp": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    },
+    "StreamEnd": {
+      "type": "object",
+      "description": "Final event. No further events will be emitted on this stream.",
+      "properties": {
+        "event": {"const": "stream.end"},
+        "data": {
+          "type": "object",
+          "required": ["reason", "sealed"],
+          "properties": {
+            "reason": {"enum": ["session-complete", "session-aborted", "client-disconnect", "server-shutdown"]},
+            "sealed": {"type": "boolean", "description": "Whether the corresponding Trace has been sealed and is retrievable."},
+            "traceRef": {"type": "string", "description": "Reference to the sealed Trace, if sealed=true."}
+          }
+        }
+      }
+    },
+    "VendorEvent": {
+      "type": "object",
+      "description": "Vendor-specific event. Event type MUST use reverse-DNS prefix.",
+      "properties": {
+        "event": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+\\."
+        },
+        "data": {}
+      }
+    }
+  }
+}

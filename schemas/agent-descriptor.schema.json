@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/agent-descriptor.schema.json",
+  "title": "AgentDescriptor",
+  "description": "Identifies and summarises an agent available for evaluation.",
+  "type": "object",
+  "required": ["agentId", "name", "version", "description", "intendedUse", "nonGoals", "riskTier", "lifecycle", "owner"],
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "description": "Stable identifier for the agent. Should not change across versions."
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "description": "SemVer identifier for this agent revision."
+    },
+    "description": {
+      "type": "string"
+    },
+    "intendedUse": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "What this agent is supposed to do. Required because evaluators cannot judge appropriateness without it."
+    },
+    "nonGoals": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "What this agent is NOT supposed to do. Required because this is where evaluation-relevant boundaries live."
+    },
+    "riskTier": {
+      "type": "object",
+      "description": "Structured risk classification. Replaces free-text tier to avoid drift.",
+      "required": ["level", "rationale"],
+      "properties": {
+        "level": {
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this tier. Prevents 'we always ship as low' drift."
+        },
+        "reviewDate": {
+          "type": "string",
+          "format": "date",
+          "description": "When the tier was last reviewed."
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "required": ["stage"],
+      "properties": {
+        "stage": {
+          "enum": ["experimental", "dev", "test", "staging", "shadow", "ga", "deprecated"]
+        },
+        "deprecatedAfter": {
+          "type": "string",
+          "format": "date",
+          "description": "If stage is 'deprecated', when it was deprecated."
+        },
+        "replacedBy": {
+          "type": "string",
+          "description": "agentId of the successor, if any."
+        }
+      }
+    },
+    "owner": {
+      "type": "object",
+      "required": ["team"],
+      "properties": {
+        "team": {"type": "string"},
+        "contact": {"type": "string", "description": "Email or channel for evaluation findings."},
+        "escalation": {"type": "string", "description": "Who to contact for urgent findings."}
+      }
+    },
+    "modalities": {
+      "type": "array",
+      "items": {
+        "enum": ["text", "voice", "image", "tool-use", "file", "code"]
+      }
+    },
+    "evaluationModes": {
+      "type": "array",
+      "items": {
+        "enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]
+      },
+      "description": "Modes this agent's evaluation surface supports. Intersection with server capabilities determines what's actually runnable."
+    },
+    "contextBundleRef": {
+      "type": "string",
+      "description": "Opaque pointer retrievable via aep.agent.contextBundle."
+    },
+    "policyProfileRef": {
+      "type": "string",
+      "description": "Opaque pointer retrievable via aep.agent.policyProfile."
+    }
+  },
+  "additionalProperties": false
+}

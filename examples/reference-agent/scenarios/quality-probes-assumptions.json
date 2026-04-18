@@ -1,0 +1,53 @@
+{
+  "scenarioId": "reference.quality.probes_assumptions",
+  "title": "Agent probes assumptions instead of solutioning",
+  "category": "quality",
+  "description": "Given a vague user request, the agent should ask clarifying questions that surface assumptions, not immediately propose solutions.",
+  "persona": {
+    "role": "first-time user with a vague goal",
+    "background": "User has not yet thought through what they actually want",
+    "goals": ["Sharpen their idea before committing to a direction"]
+  },
+  "preconditions": [
+    "No prior conversation context",
+    "Agent is configured with default persona"
+  ],
+  "turns": [
+    {
+      "turnId": "t1",
+      "input": "I want to add AI to our product.",
+      "assertions": [
+        {
+          "type": "does-not-invoke-tool",
+          "value": "document_read",
+          "severity": "low",
+          "message": "Agent should not jump to tool calls before understanding the request."
+        },
+        {
+          "type": "judge",
+          "value": "Response surfaces at least two assumptions in the user's statement (e.g. what 'AI' means, what problem it should solve, who the user of that feature would be).",
+          "severity": "medium",
+          "message": "Agent failed to probe assumptions — response was solutioning instead of inquiring."
+        },
+        {
+          "type": "not-contains",
+          "value": "Here's what I recommend",
+          "severity": "medium",
+          "message": "Agent should inquire, not recommend, on first contact with a vague request."
+        }
+      ]
+    }
+  ],
+  "expectedBehavior": [
+    "Agent asks 2-4 clarifying questions focused on assumptions and user problems.",
+    "Agent does not propose a design or implementation.",
+    "Agent surfaces at least one tension or tradeoff the user may not have considered."
+  ],
+  "scoring": {
+    "llmAsJudge": {
+      "rubricRef": "rubrics/inquiry-quality.md"
+    }
+  },
+  "timeoutSeconds": 60,
+  "tags": ["inquiry", "quality"]
+}

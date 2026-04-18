@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/evaluation-result.schema.json",
+  "title": "EvaluationResult",
+  "description": "The canonical output of an AEP evaluation session. Every completed session MUST produce exactly one EvaluationResult with this shape. Scoring is expressed across named dimensions; findings referencing specific violations are carried separately and referenced from here.",
+  "type": "object",
+  "required": [
+    "resultId",
+    "sessionId",
+    "agentId",
+    "agentVersion",
+    "testMode",
+    "scores",
+    "violations",
+    "outcome",
+    "producedAt"
+  ],
+  "properties": {
+    "resultId": {"type": "string"},
+    "sessionId": {"type": "string"},
+    "agentId": {"type": "string"},
+    "agentVersion": {"type": "string"},
+    "testMode": {
+      "enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]
+    },
+    "scores": {
+      "$ref": "#/$defs/ScoreSet",
+      "description": "Scores across canonical dimensions. All present dimensions MUST follow the DimensionScore shape; implementations MAY add vendor-specific dimensions using reverse-DNS prefixes."
+    },
+    "violations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/Violation"},
+      "description": "Structured record of rule, policy, or assertion violations. References to Finding artifacts are carried here."
+    },
+    "outcome": {
+      "$ref": "#/$defs/Outcome",
+      "description": "Top-level pass/fail/partial judgement derived from scores and violations."
+    },
+    "metrics": {
+      "$ref": "#/$defs/Metrics",
+      "description": "Operational metrics for the run."
+    },
+    "scenarioResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenarioId", "status"],
+        "properties": {
+          "scenarioId": {"type": "string"},
+          "runId": {"type": "string"},
+          "status": {"enum": ["passed", "failed", "partial", "error", "skipped"]},
+          "scoreRefs": {"type": "array", "items": {"type": "string"}},
+          "violationRefs": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "traceRef": {"type": "string"},
+    "findingsRef": {"type": "string", "description": "Pointer to the full findings collection for this session."},
+    "producedAt": {"type": "string", "format": "date-time"},
+    "producedBy": {"type": "string", "description": "Identifier of the scoring engine or evaluator that produced this result."},
+    "reproducibility": {
+      "$ref": "#/$defs/Reproducibility"
+    }
+  },
+  "$defs": {
+    "ScoreSet": {
+      "type": "object",
+      "required": ["quality", "safety"],
+      "properties": {
+        "quality": {
+          "$ref": "#/$defs/DimensionScore",
+          "description": "How well the agent performed the requested task. REQUIRED."
+        },
+        "safety": {
+          "$ref": "#/$defs/DimensionScore",
+          "description": "How well the agent honoured safety, policy, and RAI constraints. REQUIRED."
+        },
+        "grounding": {
+          "$ref": "#/$defs/DimensionScore",
+          "description": "How well the agent's outputs were supported by retrieved context or stated evidence. REQUIRED when the agent declares retrieval injection points."
+        },
+        "instructionFollowing": {"$ref": "#/$defs/DimensionScore"},
+        "robustness": {"$ref": "#/$defs/DimensionScore", "description": "Behaviour under adversarial or noisy inputs."},
+        "coherence": {"$ref": "#/$defs/DimensionScore"},
+        "efficiency": {"$ref": "#/$defs/DimensionScore", "description": "Latency/cost relative to task difficulty."},
+        "toolUse": {"$ref": "#/$defs/DimensionScore", "description": "Correctness of tool selection and invocation. REQUIRED for agents declaring tool-use modality."}
+      },
+      "additionalProperties": {"$ref": "#/$defs/DimensionScore"}
+    },
+    "DimensionScore": {
+      "type": "object",
+      "required": ["value", "scale", "method"],
+      "properties": {
+        "value": {
+          "type": "number",
+          "description": "Score value. MUST be in [0, 1] unless 'scale' declares otherwise."
+        },
+        "scale": {
+          "type": "object",
+          "required": ["min", "max"],
+          "properties": {
+            "min": {"type": "number"},
+            "max": {"type": "number"},
+            "interpretation": {"enum": ["higher-is-better", "lower-is-better"]}
+          }
+        },
+        "method": {
+          "enum": ["deterministic", "llm-judge", "human", "regression-baseline", "aggregate", "mixed"],
+          "description": "How the score was produced. See docs/SCORING.md for what each method entails."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Estimated confidence in the score (e.g. from inter-rater agreement)."
+        },
+        "rubricRef": {"type": "string"},
+        "notes": {"type": "string"},
+        "contributingFindings": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "IDs of findings that drove this score."
+        }
+      }
+    },
+    "Violation": {
+      "type": "object",
+      "required": ["violationId", "type", "severity", "findingRef"],
+      "properties": {
+        "violationId": {"type": "string"},
+        "type": {"enum": ["assertion", "policy", "schema", "contract", "resource", "other"]},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "description": {"type": "string"},
+        "ruleRef": {"type": "string", "description": "Pointer to the policy rule or assertion that was violated."},
+        "findingRef": {"type": "string", "description": "Pointer to the full Finding artifact."},
+        "dimension": {
+          "type": "string",
+          "description": "Which score dimension this violation contributes to."
+        }
+      }
+    },
+    "Outcome": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["passed", "failed", "partial", "inconclusive", "error"]},
+        "summary": {"type": "string"},
+        "gatingViolations": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Violation IDs that caused a 'failed' or 'partial' outcome."
+        }
+      }
+    },
+    "Metrics": {
+      "type": "object",
+      "properties": {
+        "turnCount": {"type": "integer"},
+        "wallClockMs": {"type": "integer"},
+        "totalInputTokens": {"type": "integer"},
+        "totalOutputTokens": {"type": "integer"},
+        "toolCallCount": {"type": "integer"},
+        "policyEventCount": {"type": "integer"},
+        "costUnits": {"type": "number"}
+      }
+    },
+    "Reproducibility": {
+      "type": "object",
+      "required": ["replayable"],
+      "properties": {
+        "replayable": {"type": "boolean"},
+        "seed": {"type": "string"},
+        "traceCompleteness": {"enum": ["partial", "complete"]},
+        "knownNondeterminism": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "additionalProperties": false
+}

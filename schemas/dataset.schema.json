@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/dataset.schema.json",
+  "title": "Dataset",
+  "description": "Portable dataset format for agent evaluation (§11.6 optional extension). A dataset groups many example inputs for driving evaluations of an agent. Implementations MAY import from OpenAI Evals, HuggingFace, LangSmith, or Braintrust formats, but conforming datasets land in this shape.",
+  "type": "object",
+  "required": ["id", "name", "version", "examples"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier for this dataset. SHOULD be globally unique within its publishing scope."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable display name."
+    },
+    "version": {
+      "type": "string",
+      "description": "Semver-style monotonic version string. Tools MAY diff across versions; the spec does not mandate diff semantics."
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of what the dataset covers and its intended use."
+    },
+    "agentId": {
+      "type": "string",
+      "description": "When present, the dataset is intended for this specific agent. Example inputs MUST validate against the agent's inputSchema (AEP-REQ-074)."
+    },
+    "evaluator": {
+      "type": "string",
+      "description": "When the dataset is calibrated for a named RAI evaluator (e.g. 'harmful_content', 'hallucination'), record it here."
+    },
+    "policyProfileRef": {
+      "type": "string",
+      "description": "Reference to a PolicyProfile (§11.1) that this dataset is designed to exercise. Enables 'which datasets cover this rule set' queries."
+    },
+    "sourceRef": {
+      "type": "string",
+      "description": "Provenance pointer to the upstream source: HuggingFace slug (e.g. 'hf:truthful_qa'), OpenAI Evals path, internal ticket, git URL, etc. Required when imported from a foreign format (AEP-REQ-078)."
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Freeform tags for filtering and discovery (e.g. 'safety', 'summarisation', 'english')."
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX license identifier or a free-form license notice for the dataset contents."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary dataset-level metadata. Vendor-specific fields SHOULD use reverse-DNS prefixes."
+    },
+    "examples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/Example"},
+      "description": "The dataset's example inputs."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "Example": {
+      "type": "object",
+      "required": ["id", "input"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier for this example within the dataset."
+        },
+        "input": {
+          "description": "The input to submit to the agent. When the dataset declares agentId, this MUST validate against the agent's inputSchema (AEP-REQ-074)."
+        },
+        "expected": {
+          "description": "Optional reference answer for reference-aware grading. Shape is dataset-specific; tools interpreting this field SHOULD match it to the agent's outputSchema when possible."
+        },
+        "references": {
+          "type": "array",
+          "items": {},
+          "description": "Optional multiple acceptable references, for reference-aware judging that accepts variant correct answers."
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Optional per-example context to inject via the agent's contextModel. Keys SHOULD match declared injection points."
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "Optional difficulty label (e.g. 'easy', 'medium', 'hard') for filtering."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

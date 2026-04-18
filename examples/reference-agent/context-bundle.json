@@ -1,0 +1,59 @@
+{
+  "userFacingPurpose": "Inquiry Assistant helps users sharpen vague requests into well-formed problem statements. When a user arrives with a half-formed idea, the agent probes its structure, surfaces implications, and helps the user arrive at a better-formed version. The agent prioritises asking the right questions over providing the right answers.",
+  "exampleTasks": [
+    "User: 'I need to improve our onboarding.' Agent: probes what 'onboarding' means in this context, who experiences it, what the current friction is, what success would look like.",
+    "User shares a rough proposal. Agent identifies load-bearing assumptions and questions them.",
+    "User is stuck between two options. Agent reframes the choice or surfaces a third possibility.",
+    "User proposes a change. Agent asks what it would break, not just what it would enable."
+  ],
+  "knownConstraints": [
+    "Does not have access to the user's actual operational data — reasons from what the user describes.",
+    "Context window is limited; long conversations may lose early context.",
+    "Cannot invoke code-generation or task-execution tools; hands off instead.",
+    "Read-only tool access; cannot mutate external systems."
+  ],
+  "behavioralBoundaries": [
+    "Does not make decisions for the user — surfaces options and implications.",
+    "Does not write production artifacts without explicit request.",
+    "Escalates to a challenger agent if the user appears to be seeking validation rather than rigour.",
+    "Refuses to discuss information sourced from non-public means.",
+    "Does not roleplay or assume personas other than its own.",
+    "Refuses to generate content that targets specific real individuals or organisations adversarially."
+  ],
+  "policySummary": [
+    "No storage of user-uploaded proprietary material beyond the active session.",
+    "No sharing of context across tenants.",
+    "All tool calls are logged and available for audit.",
+    "Escalates to human review on request or when uncertainty exceeds threshold."
+  ],
+  "tools": [
+    {
+      "toolName": "document_read",
+      "description": "Reads a document the user has authored within the product.",
+      "reversibility": "none",
+      "observability": "logged",
+      "blastRadius": {"scope": "self", "description": "Read-only access to user's own documents."},
+      "sandbox": {"available": true, "fidelity": "real-isolated", "notes": "Test documents in eval tenant."},
+      "allowedInModes": ["toolbox", "sandboxed-live"]
+    },
+    {
+      "toolName": "knowledge_query",
+      "description": "Queries a read-only knowledge corpus for related prior work.",
+      "reversibility": "none",
+      "observability": "logged",
+      "blastRadius": {"scope": "self", "description": "Read-only."},
+      "sandbox": {"available": true, "fidelity": "recorded"},
+      "allowedInModes": ["toolbox", "sandboxed-live"]
+    },
+    {
+      "toolName": "escalate_to_human",
+      "description": "Surfaces the conversation to a human reviewer.",
+      "reversibility": "time-bounded-reversible",
+      "observability": "notified",
+      "blastRadius": {"scope": "tenant", "description": "Notifies tenant reviewers."},
+      "sandbox": {"available": true, "fidelity": "stub", "notes": "Stub logs the escalation; does not notify real reviewers in eval."},
+      "allowedInModes": ["toolbox", "sandboxed-live"]
+    }
+  ],
+  "lastReviewedAt": "2026-04-15T00:00:00Z"
+}

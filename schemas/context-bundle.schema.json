@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/context-bundle.schema.json",
+  "title": "AgentContextBundle",
+  "description": "Curated representation of what an agent is for, for use by evaluators.",
+  "type": "object",
+  "required": ["userFacingPurpose", "exampleTasks", "behavioralBoundaries"],
+  "properties": {
+    "userFacingPurpose": {
+      "type": "string",
+      "description": "One-paragraph description of what users are trying to accomplish with this agent."
+    },
+    "exampleTasks": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1,
+      "description": "Concrete examples of tasks this agent is supposed to handle well."
+    },
+    "knownConstraints": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Known limitations the agent operates under (context window, tool availability, data freshness, etc.)."
+    },
+    "behavioralBoundaries": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1,
+      "description": "What the agent should refuse to do, or should escalate rather than attempt."
+    },
+    "policySummary": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Human-readable summary of applicable policies. The authoritative version is the PolicyProfile."
+    },
+    "tools": {
+      "type": "array",
+      "items": {"$ref": "./tool-capability.schema.json"},
+      "description": "Per-tool capability descriptors. Replaces the v0 sideEffectLevel enum with structured attributes."
+    },
+    "specRef": {
+      "type": "string",
+      "description": "Optional pointer to the originating specification if the agent was spec-driven (e.g. a Spec Canvas URI)."
+    },
+    "lastReviewedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the bundle was last validated against the agent's actual behaviour. Drift risk is real; see Surface Parity Check."
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/trace.schema.json",
+  "title": "Trace",
+  "description": "Canonical record of an AEP session's execution, including reasoning steps, tool usage, decision paths, and model calls. AEP-compliant servers MUST produce a Trace for every session, sealed after completion. Traces MUST be sufficient for deterministic replay when the agent declares 'replaySupported: true'.",
+  "type": "object",
+  "required": [
+    "traceId",
+    "sessionId",
+    "aepVersion",
+    "testMode",
+    "turns",
+    "sealed",
+    "startedAt"
+  ],
+  "properties": {
+    "traceId": {"type": "string"},
+    "sessionId": {"type": "string"},
+    "aepVersion": {"type": "string"},
+    "agentId": {
+      "type": "string",
+      "description": "Required for single-agent sessions. OPTIONAL for composite sessions (§11.7 CSE extension); in that case per-turn nodeId identifies the active agent."
+    },
+    "agentVersion": {
+      "type": "string",
+      "description": "Required when agentId is set."
+    },
+    "testMode": {
+      "enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"],
+      "description": "Mode in which this trace was captured. Replay access MUST honour this mode — a trace captured in 'toolbox' MUST NOT be replayed by a caller authorised only for 'blackbox'."
+    },
+    "sealed": {
+      "type": "boolean",
+      "description": "Once true, the trace is immutable. Servers MUST reject any mutation attempts."
+    },
+    "sealedAt": {"type": "string", "format": "date-time"},
+    "startedAt": {"type": "string", "format": "date-time"},
+    "completedAt": {"type": "string", "format": "date-time"},
+    "injectedContext": {
+      "type": "object",
+      "description": "Snapshot of context injected at session creation. Required for deterministic replay."
+    },
+    "seed": {
+      "type": "string",
+      "description": "Random seed used, when the agent declares 'seeded' determinism."
+    },
+    "turns": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/TraceTurn"}
+    },
+    "decisionPath": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/DecisionNode"},
+      "description": "Optional higher-level record of agent decisions (e.g. for agents with explicit planners or router models)."
+    },
+    "errors": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/TraceError"}
+    },
+    "replay": {
+      "$ref": "#/$defs/ReplayMetadata"
+    }
+  },
+  "$defs": {
+    "TraceTurn": {
+      "type": "object",
+      "required": ["turnIndex", "input", "output", "startedAt", "completedAt"],
+      "properties": {
+        "turnIndex": {"type": "integer", "minimum": 0},
+        "turnId": {"type": "string"},
+        "nodeId": {
+          "type": "string",
+          "description": "Optional (§11.7 CSE extension). When present, identifies which graph node was the active agent for this turn. Absent for single-agent sessions."
+        },
+        "input": {"description": "Input as submitted. May be object or string depending on agent inputSchema."},
+        "output": {"description": "Output as returned. May be object or string depending on agent outputSchema."},
+        "inputDigest": {"type": "string", "description": "Hash of normalised input. Required for replay verification."},
+        "outputDigest": {"type": "string"},
+        "startedAt": {"type": "string", "format": "date-time"},
+        "completedAt": {"type": "string", "format": "date-time"},
+        "latencyMs": {"type": "integer"},
+        "reasoning": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/ReasoningStep"},
+          "description": "Reasoning steps exposed per the agent's traceabilityContract.reasoning level."
+        },
+        "toolCalls": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/ToolCallEvent"}
+        },
+        "policyEvents": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/PolicyEvent"}
+        },
+        "modelCalls": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/ModelCallRecord"}
+        },
+        "stateSnapshot": {
+          "type": "object",
+          "description": "Captured agent state after this turn. Required for deterministic replay of multi-turn sessions."
+        }
+      }
+    },
+    "ReasoningStep": {
+      "type": "object",
+      "required": ["stepId", "type"],
+      "properties": {
+        "stepId": {"type": "string"},
+        "type": {"enum": ["plan", "decide", "retrieve", "evaluate", "reflect", "other"]},
+        "summary": {"type": "string", "description": "Short description suitable for 'summary' reasoning level."},
+        "detail": {"type": "string", "description": "Full content suitable for 'step-by-step' or 'full' reasoning level."},
+        "timestamp": {"type": "string", "format": "date-time"}
+      }
+    },
+    "ToolCallEvent": {
+      "type": "object",
+      "required": ["toolCallId", "toolName", "startedAt"],
+      "properties": {
+        "toolCallId": {"type": "string"},
+        "toolName": {"type": "string"},
+        "arguments": {"description": "Arguments passed to the tool."},
+        "result": {"description": "Tool return value."},
+        "error": {"type": "string"},
+        "sandboxed": {"type": "boolean"},
+        "sandboxFidelity": {"enum": ["none", "stub", "recorded", "simulated", "real-isolated"]},
+        "startedAt": {"type": "string", "format": "date-time"},
+        "completedAt": {"type": "string", "format": "date-time"},
+        "latencyMs": {"type": "integer"}
+      }
+    },
+    "PolicyEvent": {
+      "type": "object",
+      "required": ["policyEventId", "ruleId", "outcome", "timestamp"],
+      "properties": {
+        "policyEventId": {"type": "string"},
+        "ruleId": {"type": "string"},
+        "outcome": {"enum": ["passed", "warned", "refused", "redacted", "escalated", "logged"]},
+        "matchedCondition": {"type": "string"},
+        "actionTaken": {"type": "string"},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "timestamp": {"type": "string", "format": "date-time"}
+      }
+    },
+    "ModelCallRecord": {
+      "type": "object",
+      "required": ["modelCallId", "model"],
+      "properties": {
+        "modelCallId": {"type": "string"},
+        "model": {"type": "string"},
+        "promptDigest": {"type": "string"},
+        "prompt": {"type": "string", "description": "Full prompt text. Present only when traceabilityContract.modelCalls is 'full'."},
+        "responseDigest": {"type": "string"},
+        "response": {"type": "string"},
+        "inputTokens": {"type": "integer"},
+        "outputTokens": {"type": "integer"},
+        "latencyMs": {"type": "integer"},
+        "parameters": {
+          "type": "object",
+          "description": "Model parameters (temperature, top_p, etc.). Required for deterministic replay.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "DecisionNode": {
+      "type": "object",
+      "required": ["nodeId", "type"],
+      "properties": {
+        "nodeId": {"type": "string"},
+        "type": {"enum": ["route", "plan", "select-tool", "escalate", "refuse", "answer"]},
+        "rationale": {"type": "string"},
+        "alternatives": {"type": "array", "items": {"type": "string"}, "description": "Other options considered."},
+        "timestamp": {"type": "string", "format": "date-time"}
+      }
+    },
+    "TraceError": {
+      "type": "object",
+      "required": ["errorId", "code", "timestamp"],
+      "properties": {
+        "errorId": {"type": "string"},
+        "code": {"type": "integer"},
+        "message": {"type": "string"},
+        "recoverable": {"type": "boolean"},
+        "turnIndex": {"type": "integer"},
+        "timestamp": {"type": "string", "format": "date-time"}
+      }
+    },
+    "ReplayMetadata": {
+      "type": "object",
+      "properties": {
+        "replayable": {"type": "boolean"},
+        "protocolVersion": {"type": "string"},
+        "completeness": {"enum": ["partial", "complete"]},
+        "nondeterministicPoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "location": {"type": "string"},
+              "reason": {"type": "string"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

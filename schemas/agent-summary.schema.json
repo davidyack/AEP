@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/agent-summary.schema.json",
+  "title": "AgentSummary",
+  "description": "Compact summary of an agent returned by GET /aep/agents. Enough to browse and filter; retrieve the full AgentContract via GET /aep/agents/{agentId} for details.",
+  "type": "object",
+  "required": [
+    "agentId",
+    "version",
+    "name",
+    "riskTier",
+    "lifecycle",
+    "supportedModes",
+    "authorizedModes",
+    "lastUpdatedAt"
+  ],
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "description": "Stable identifier for the agent."
+    },
+    "version": {
+      "type": "string",
+      "description": "SemVer identifier for this agent revision."
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable display name."
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description suitable for list rendering."
+    },
+    "riskTier": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "level": {"enum": ["low", "medium", "high", "critical"]}
+      },
+      "description": "Minimal risk tier info (level only). Full risk rationale is in the contract."
+    },
+    "lifecycle": {
+      "type": "object",
+      "required": ["stage"],
+      "properties": {
+        "stage": {
+          "enum": ["experimental", "dev", "test", "staging", "shadow", "ga", "deprecated"]
+        }
+      }
+    },
+    "domains": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Domain IDs from the capabilities registry. Used for filtering."
+    },
+    "modalities": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "I/O modalities."
+    },
+    "supportedModes": {
+      "type": "array",
+      "items": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
+      "minItems": 1,
+      "description": "Evaluation modes this agent supports. Derived from the Agent Contract's evaluationModes."
+    },
+    "authorizedModes": {
+      "type": "array",
+      "items": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
+      "description": "Subset of supportedModes the CALLING IDENTITY is authorised to use. May be smaller than supportedModes based on caller's permissions."
+    },
+    "supportedExtensions": {
+      "type": "array",
+      "items": {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay"]},
+      "description": "Optional extensions this agent declares support for."
+    },
+    "owner": {
+      "type": "object",
+      "properties": {
+        "team": {"type": "string"},
+        "contact": {"type": "string"}
+      },
+      "description": "Minimal ownership info for routing findings."
+    },
+    "lastUpdatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the last change to this agent's contract. Used by clients for incremental sync via ?updatedSince=."
+    },
+    "contractUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Direct link to the full AgentContract (typically /aep/agents/{agentId})."
+    }
+  },
+  "additionalProperties": false
+}

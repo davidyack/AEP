@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/evaluation-session.schema.json",
+  "title": "EvaluationSession",
+  "description": "Formal model of an AEP evaluation session. The session is the top-level unit of evaluation: it binds an evaluator, an agent, a test mode, injected context, one or more scenarios, and the resulting evidence into a single auditable record. Every AEP-compliant server MUST model sessions according to this schema.",
+  "type": "object",
+  "required": [
+    "sessionId",
+    "aepVersion",
+    "testMode",
+    "evaluator",
+    "state",
+    "createdAt",
+    "expiresAt",
+    "injectedContext",
+    "lifecycle"
+  ],
+  "description": "Formal model of an AEP evaluation session. The session is the top-level unit of evaluation: it binds an evaluator, an agent (or a graph of agents under the CSE extension, §11.7), a test mode, injected context, one or more scenarios, and the resulting evidence into a single auditable record. Every AEP-compliant server MUST model sessions according to this schema. Exactly one of agentId or graph MUST be present (AEP-REQ-109).",
+  "properties": {
+    "sessionId": {
+      "type": "string",
+      "description": "Server-assigned unique identifier. MUST be unpredictable (no sequential IDs)."
+    },
+    "aepVersion": {"type": "string"},
+    "agentId": {
+      "type": "string",
+      "description": "The agent bound to this session for single-agent evaluation. REQUIRED unless graph is present (composite session, CSE extension)."
+    },
+    "agentVersion": {
+      "type": "string",
+      "description": "Exact version of the agent bound to this session. REQUIRED when agentId is set. MUST be captured at session creation and MUST NOT change mid-session."
+    },
+    "graph": {
+      "type": "object",
+      "description": "Optional (§11.7 CSE extension). When present, this is a composite session: turns execute against nodes in the graph, not against a single agent. MUST NOT be present simultaneously with agentId. Shape defined by the CSE extension; see schemas/composite-graph.schema.json."
+    },
+    "testMode": {
+      "enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"],
+      "description": "Negotiated mode for this session. Determines what visibility the evaluator has."
+    },
+    "evaluator": {
+      "$ref": "#/$defs/Evaluator",
+      "description": "Who is running this session. MUST be authenticated."
+    },
+    "state": {
+      "enum": ["created", "active", "paused", "completed", "expired", "aborted"],
+      "description": "Current lifecycle state. Transitions MUST follow the lifecycle state machine (see LIFECYCLE in spec)."
+    },
+    "createdAt": {"type": "string", "format": "date-time"},
+    "expiresAt": {"type": "string", "format": "date-time"},
+    "closedAt": {"type": "string", "format": "date-time"},
+    "injectedContext": {
+      "$ref": "#/$defs/InjectedContext",
+      "description": "Context supplied by the evaluator to simulate realistic conditions."
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenarioId", "status"],
+        "properties": {
+          "scenarioId": {"type": "string"},
+          "status": {"enum": ["pending", "running", "completed", "failed", "skipped"]},
+          "runId": {"type": "string"},
+          "startedAt": {"type": "string", "format": "date-time"},
+          "completedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "description": "Scenarios executed in this session, with status. MAY be empty for interactive sessions."
+    },
+    "turns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["turnId", "turnIndex", "input", "output", "startedAt", "completedAt"],
+        "properties": {
+          "turnId": {"type": "string"},
+          "turnIndex": {"type": "integer", "minimum": 0},
+          "input": {},
+          "output": {},
+          "startedAt": {"type": "string", "format": "date-time"},
+          "completedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "description": "Turns executed in this session. Agents supporting multi-turn MUST maintain ordering."
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/LifecycleRecord"
+    },
+    "traceRef": {"type": "string", "description": "Pointer to the trace artifact."},
+    "resultRef": {"type": "string", "description": "Pointer to the EvaluationResult once the session is completed."},
+    "limits": {
+      "type": "object",
+      "properties": {
+        "maxTurns": {"type": "integer"},
+        "maxCostUnits": {"type": "number", "description": "Abstract cost unit (tokens, currency, etc.) agreed at session creation."},
+        "costConsumed": {"type": "number"}
+      }
+    }
+  },
+  "$defs": {
+    "Evaluator": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string"},
+        "type": {"enum": ["human", "automated", "hybrid"]},
+        "name": {"type": "string"},
+        "organisation": {"type": "string"}
+      }
+    },
+    "InjectedContext": {
+      "type": "object",
+      "description": "Context slots the test harness provides. Keys MUST correspond to injection points declared in the AgentContract's contextModel.",
+      "properties": {
+        "user": {
+          "type": "object",
+          "description": "Simulated user profile.",
+          "additionalProperties": true
+        },
+        "system": {
+          "type": "object",
+          "description": "Simulated system state.",
+          "additionalProperties": true
+        },
+        "tenant": {
+          "type": "object",
+          "description": "Simulated tenant/org configuration.",
+          "additionalProperties": true
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {"enum": ["user", "agent", "system"]},
+              "content": {"type": "string"},
+              "timestamp": {"type": "string", "format": "date-time"}
+            }
+          },
+          "description": "Prior conversational turns to seed the agent with."
+        },
+        "environment": {
+          "type": "object",
+          "description": "Simulated environment variables, locale, timezone, feature flags.",
+          "additionalProperties": true
+        },
+        "retrieval": {
+          "type": "object",
+          "description": "Simulated retrieval results if the agent normally queries a knowledge base.",
+          "additionalProperties": true
+        },
+        "custom": {
+          "type": "object",
+          "description": "Agent-specific injection slots declared in the contextModel.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "LifecycleRecord": {
+      "type": "object",
+      "required": ["transitions"],
+      "properties": {
+        "transitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "at"],
+            "properties": {
+              "from": {"type": "string"},
+              "to": {"type": "string"},
+              "at": {"type": "string", "format": "date-time"},
+              "reason": {"type": "string"}
+            }
+          },
+          "description": "Ordered record of state transitions. MUST be immutable once written."
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {"required": ["agentId", "agentVersion"], "not": {"required": ["graph"]}},
+    {"required": ["graph"], "not": {"required": ["agentId"]}}
+  ],
+  "additionalProperties": false
+}

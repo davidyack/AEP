@@ -1,0 +1,197 @@
+{
+  "aepVersion": "0.1",
+  "agentId": "example.inquiry-assistant",
+  "version": "1.2.0",
+  "descriptor": {
+    "agentId": "example.inquiry-assistant",
+    "name": "Inquiry Assistant",
+    "version": "1.2.0",
+    "description": "A representative product-embedded agent that helps users sharpen vague requests by asking clarifying questions before proposing solutions. Included as a worked example; not a real product.",
+    "intendedUse": [
+      "Help users transform vague requests into well-formed problem statements",
+      "Surface assumptions the user may not have noticed",
+      "Propose clarifying questions rather than jumping to solutions",
+      "Hand off to domain-specific agents when the request is well-formed"
+    ],
+    "nonGoals": [
+      "Execute tasks on behalf of the user",
+      "Write production code or final deliverables",
+      "Replace domain expertise",
+      "Handle personally identifiable information — escalate instead"
+    ],
+    "riskTier": {
+      "level": "medium",
+      "rationale": "Influences user decisions but does not execute them.",
+      "reviewDate": "2026-04-15"
+    },
+    "lifecycle": {"stage": "staging"},
+    "owner": {
+      "team": "Example Agents Team",
+      "contact": "agents@example.com",
+      "escalation": "agents-oncall@example.com"
+    },
+    "modalities": ["text", "tool-use"],
+    "evaluationModes": ["blackbox", "graybox", "policybox", "toolbox", "replay"]
+  },
+  "inputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["message"],
+    "properties": {
+      "message": {"type": "string", "minLength": 1, "maxLength": 8000},
+      "metadata": {"type": "object"}
+    },
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["response"],
+    "properties": {
+      "response": {"type": "string"},
+      "handoff": {
+        "type": "object",
+        "properties": {
+          "targetAgent": {"type": "string"},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "additionalProperties": false
+  },
+  "contextModel": {
+    "injectionPoints": [
+      {
+        "name": "user",
+        "type": "user",
+        "required": true,
+        "description": "Simulated user profile: role, tenure, prior interactions count.",
+        "schema": {
+          "type": "object",
+          "required": ["role"],
+          "properties": {
+            "role": {"type": "string"},
+            "tenureMonths": {"type": "integer", "minimum": 0},
+            "priorInteractions": {"type": "integer", "minimum": 0}
+          }
+        }
+      },
+      {
+        "name": "history",
+        "type": "history",
+        "required": false,
+        "description": "Prior turns of the current conversation.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["role", "content"],
+            "properties": {
+              "role": {"enum": ["user", "assistant"]},
+              "content": {"type": "string"}
+            }
+          }
+        }
+      },
+      {
+        "name": "environment",
+        "type": "environment",
+        "required": false,
+        "description": "Locale, timezone, feature flags.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "locale": {"type": "string"},
+            "timezone": {"type": "string"},
+            "flags": {"type": "object"}
+          }
+        }
+      }
+    ],
+    "historyModel": "linear",
+    "maxHistoryTurns": 50
+  },
+  "capabilities": {
+    "domains": [
+      {
+        "id": "product-management",
+        "description": "Helping PMs sharpen ideas into well-formed problem statements.",
+        "confidence": "baseline"
+      },
+      {
+        "id": "strategy",
+        "description": "Surfacing implications and tensions in strategic options.",
+        "confidence": "baseline"
+      },
+      {
+        "id": "requirements-elicitation",
+        "description": "Probing assumptions to clarify user needs.",
+        "confidence": "production"
+      }
+    ],
+    "actions": [
+      {
+        "id": "clarify",
+        "description": "Ask questions that surface the user's unstated assumptions."
+      },
+      {
+        "id": "probe",
+        "description": "Identify load-bearing assumptions in a user's statement and question them."
+      },
+      {
+        "id": "reframe",
+        "description": "Offer an alternative framing when the user's framing is stuck."
+      },
+      {
+        "id": "handoff",
+        "description": "Refer to a more specialised agent when the request exits scope."
+      }
+    ],
+    "modalities": ["text"],
+    "languages": ["en"],
+    "outOfScope": [
+      "legal-drafting",
+      "medical-advice",
+      "task-execution"
+    ],
+    "qualityClaims": [
+      {
+        "domainId": "requirements-elicitation",
+        "actionId": "probe",
+        "level": "strong",
+        "evidence": "scenarios/quality-probes-assumptions.json"
+      }
+    ]
+  },
+  "contextBundleRef": "./context-bundle.json",
+  "policyProfileRef": "policy:example.default@2026-04-01",
+  "evaluationModes": ["blackbox", "graybox", "policybox", "toolbox", "replay"],
+  "determinism": {
+    "level": "seeded",
+    "seedParameter": "metadata.seed",
+    "replaySupported": true
+  },
+  "endpoints": {
+    "discovery": "/aep/agents/example.inquiry-assistant",
+    "session": "/aep/rpc",
+    "turn": "/aep/rpc",
+    "trace": "/aep/rpc",
+    "result": "/aep/rpc",
+    "redteam": "/aep/rpc"
+  },
+  "limits": {
+    "maxTurnsPerSession": 50,
+    "maxInputBytes": 32000,
+    "maxOutputBytes": 32000,
+    "turnTimeoutSeconds": 60,
+    "sessionTtlSeconds": 1800,
+    "rateLimitPerMinute": 120,
+    "maxConcurrentSessions": 10
+  },
+  "traceability": {
+    "reasoning": "summary",
+    "toolCalls": "full",
+    "policyEvents": "all",
+    "modelCalls": "metadata"
+  }
+}

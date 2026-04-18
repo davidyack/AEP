@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/agent-contract.schema.json",
+  "title": "AgentContract",
+  "description": "The strict contract every AEP-compliant agent MUST publish. Supersedes the v0.1 AgentDescriptor, which is retained as a subcomponent. An agent is AEP-compliant if and only if it publishes a valid AgentContract at its discovery endpoint and honours the guarantees declared within it.",
+  "type": "object",
+  "required": [
+    "aepVersion",
+    "agentId",
+    "version",
+    "descriptor",
+    "inputSchema",
+    "outputSchema",
+    "contextModel",
+    "capabilities",
+    "evaluationModes",
+    "endpoints"
+  ],
+  "properties": {
+    "aepVersion": {
+      "type": "string",
+      "pattern": "^0\\.[0-9]+(\\.[0-9]+)?$|^[1-9][0-9]*\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "The AEP version this contract conforms to. MUST match the protocol version negotiated during initialisation."
+    },
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier for the agent. MUST NOT change across versions of the same agent."
+    },
+    "version": {
+      "type": "string",
+      "description": "SemVer identifier for this agent revision. MUST be present; MUST change when behaviour changes."
+    },
+    "descriptor": {
+      "$ref": "./agent-descriptor.schema.json",
+      "description": "Identity, risk, lifecycle, and ownership metadata."
+    },
+    "inputSchema": {
+      "type": "object",
+      "description": "JSON Schema describing the shape of inputs this agent accepts. MUST be a valid JSON Schema 2020-12 document. Evaluators MUST validate inputs against this schema before submission.",
+      "properties": {
+        "$schema": {"type": "string"},
+        "type": {"type": "string"},
+        "properties": {"type": "object"},
+        "required": {"type": "array"}
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "JSON Schema describing the shape of outputs this agent produces. MUST be a valid JSON Schema 2020-12 document. Evaluators MUST validate outputs against this schema before scoring."
+    },
+    "contextModel": {
+      "$ref": "#/$defs/ContextModel",
+      "description": "Describes what context this agent consumes and how test harnesses MUST inject it."
+    },
+    "capabilities": {
+      "$ref": "./capabilities-registry.schema.json",
+      "description": "Declared domains, actions, and modalities. See capabilities-registry.schema.json."
+    },
+    "contextBundleRef": {
+      "type": "string",
+      "description": "Pointer to the AgentContextBundle for evaluator orientation."
+    },
+    "policyProfileRef": {
+      "type": "string",
+      "description": "Pointer to the PolicyProfile. MAY require elevated test mode to retrieve."
+    },
+    "evaluationModes": {
+      "type": "array",
+      "items": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
+      "minItems": 1,
+      "description": "Evaluation modes this agent supports. Agents MUST support at least 'blackbox' and 'graybox'. Agents SHOULD support 'replay' for reproducibility."
+    },
+    "determinism": {
+      "$ref": "#/$defs/DeterminismDeclaration",
+      "description": "How deterministic this agent is, and what knobs control it."
+    },
+    "endpoints": {
+      "$ref": "#/$defs/EndpointMap",
+      "description": "URLs or paths exposing AEP methods. MUST include discovery, session, turn, trace, and result endpoints."
+    },
+    "limits": {
+      "$ref": "#/$defs/Limits",
+      "description": "Hard and soft limits evaluators MUST respect."
+    },
+    "traceability": {
+      "$ref": "#/$defs/TraceabilityContract",
+      "description": "What reasoning, tool calls, and decisions the agent commits to expose via the trace interface."
+    },
+    "datasetRefs": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Optional (§11.6 Dataset extension). Opaque references to dataset documents covering this agent — URLs, OCI-style digests, or internal slugs. Purely discoverability; servers MUST NOT derive behaviour from dataset content."
+    },
+    "compositeCapable": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, this agent is safe to participate as a node in a composite session (§11.7 CSE extension). Agents that assume they own the session or maintain incompatible state conventions MUST declare this false."
+    }
+  },
+  "$defs": {
+    "ContextModel": {
+      "type": "object",
+      "required": ["injectionPoints"],
+      "properties": {
+        "injectionPoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "type", "required"],
+            "properties": {
+              "name": {"type": "string", "description": "E.g. 'user_profile', 'conversation_history', 'tenant_config'."},
+              "type": {"enum": ["user", "system", "tenant", "history", "environment", "retrieval", "other"]},
+              "schema": {"type": "object", "description": "JSON Schema for this injection point's payload."},
+              "required": {"type": "boolean"},
+              "description": {"type": "string"}
+            }
+          },
+          "description": "Named slots where test harnesses MUST be able to inject context. An agent that does not declare injection points cannot be evaluated with realistic conditions."
+        },
+        "historyModel": {
+          "enum": ["none", "linear", "threaded", "windowed"],
+          "description": "How the agent accumulates conversational state. MUST be declared for multi-turn agents."
+        },
+        "maxHistoryTurns": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Upper bound on history the agent will honour. Evaluators MUST NOT exceed this."
+        }
+      }
+    },
+    "DeterminismDeclaration": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "level": {
+          "enum": ["deterministic", "seeded", "stochastic"],
+          "description": "'deterministic' = same input + context produces same output byte-for-byte. 'seeded' = same input + context + seed produces same output. 'stochastic' = no guarantee."
+        },
+        "seedParameter": {
+          "type": "string",
+          "description": "If level is 'seeded', the name of the input field carrying the seed."
+        },
+        "replaySupported": {
+          "type": "boolean",
+          "description": "Whether this agent can be run in 'replay' mode from a captured trace."
+        }
+      }
+    },
+    "EndpointMap": {
+      "type": "object",
+      "required": ["discovery", "session", "turn", "trace", "result"],
+      "properties": {
+        "discovery": {"type": "string", "description": "AEP discovery endpoint. Typically the path hosting aep.agent.list and aep.agent.get."},
+        "session": {"type": "string", "description": "Endpoint for aep.session.create / aep.session.close."},
+        "turn": {"type": "string", "description": "Endpoint for aep.turn.execute and aep.scenario.run."},
+        "trace": {"type": "string", "description": "Endpoint for aep.trace.get."},
+        "result": {"type": "string", "description": "Endpoint for aep.result.get and aep.findings.list."},
+        "redteam": {"type": "string", "description": "Optional adversarial interface (see RED-TEAMING.md)."}
+      }
+    },
+    "Limits": {
+      "type": "object",
+      "properties": {
+        "maxTurnsPerSession": {"type": "integer", "minimum": 1},
+        "maxInputBytes": {"type": "integer", "minimum": 1},
+        "maxOutputBytes": {"type": "integer", "minimum": 1},
+        "turnTimeoutSeconds": {"type": "integer", "minimum": 1},
+        "sessionTtlSeconds": {"type": "integer", "minimum": 1},
+        "rateLimitPerMinute": {"type": "integer", "minimum": 1},
+        "maxConcurrentSessions": {"type": "integer", "minimum": 1}
+      },
+      "description": "Servers MUST enforce these limits. Clients MUST respect them. Violations return error -32020."
+    },
+    "TraceabilityContract": {
+      "type": "object",
+      "required": ["reasoning", "toolCalls", "policyEvents"],
+      "properties": {
+        "reasoning": {
+          "enum": ["none", "summary", "step-by-step", "full"],
+          "description": "What level of reasoning the agent exposes via the trace interface."
+        },
+        "toolCalls": {
+          "enum": ["none", "names-only", "arguments", "full"],
+          "description": "What tool call detail is exposed in 'toolbox' mode."
+        },
+        "policyEvents": {
+          "enum": ["none", "triggered-only", "all"],
+          "description": "What policy detail is exposed in 'policybox' mode. 'all' includes passed rules."
+        },
+        "modelCalls": {
+          "enum": ["none", "metadata", "digests", "full"],
+          "description": "What underlying model call detail is exposed. 'full' includes prompts (privacy-sensitive)."
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

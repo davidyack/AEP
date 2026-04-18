@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/policy-profile.schema.json",
+  "title": "PolicyProfile",
+  "description": "Structured policy expression for machine-readable assertion. Replaces the v0 four-arrays-of-strings approach, which was a placeholder not a design.",
+  "type": "object",
+  "required": ["profileId", "version", "rules"],
+  "properties": {
+    "profileId": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "effectiveFrom": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "rules": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/PolicyRule"}
+    },
+    "escalationPaths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["trigger", "action"],
+        "properties": {
+          "trigger": {"type": "string"},
+          "action": {"enum": ["refuse", "escalate-human", "escalate-agent", "ask-clarification", "soft-decline"]},
+          "target": {"type": "string", "description": "For escalate-* actions, who receives the escalation."}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "PolicyRule": {
+      "type": "object",
+      "required": ["ruleId", "category", "severity", "condition", "action"],
+      "properties": {
+        "ruleId": {"type": "string"},
+        "category": {"enum": ["safety", "privacy", "security", "compliance", "tool-use", "content", "other"]},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "description": {"type": "string"},
+        "condition": {
+          "type": "object",
+          "description": "When the rule applies. Free-form per category.",
+          "properties": {
+            "when": {"type": "string", "description": "Human-readable condition, e.g. 'user requests PII'."},
+            "matcher": {
+              "type": "object",
+              "description": "Optional machine-readable matcher. Implementations may define their own matcher schemas; this field is a carrier.",
+              "additionalProperties": true
+            }
+          }
+        },
+        "action": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": {"enum": ["refuse", "redact", "warn", "log-only", "escalate", "require-confirmation"]},
+            "parameters": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["description"],
+            "properties": {
+              "description": {"type": "string"},
+              "condition": {"type": "string"},
+              "approvedBy": {"type": "string"}
+            }
+          }
+        },
+        "testable": {
+          "type": "boolean",
+          "description": "Whether this rule can be asserted against in scenarios. Some policies are aspirational; flagging them as non-testable prevents false-negative findings."
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

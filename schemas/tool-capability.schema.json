@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/tool-capability.schema.json",
+  "title": "ToolCapability",
+  "description": "Structured description of a tool's behaviour. Replaces the v0 single-enum sideEffectLevel with the four attributes that actually matter for evaluation: reversibility, observability, blast radius, and sandbox availability.",
+  "type": "object",
+  "required": ["toolName", "reversibility", "observability", "blastRadius"],
+  "properties": {
+    "toolName": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "reversibility": {
+      "enum": ["none", "reversible", "time-bounded-reversible", "irreversible"],
+      "description": "Can the side effect be undone? 'none' = no side effect; 'time-bounded-reversible' = reversible within some window (e.g. email drafts before send)."
+    },
+    "observability": {
+      "enum": ["silent", "logged", "audited", "notified"],
+      "description": "Who sees that this tool ran? 'silent' = no trace; 'notified' = external parties are informed (e.g. emails sent)."
+    },
+    "blastRadius": {
+      "type": "object",
+      "required": ["scope"],
+      "properties": {
+        "scope": {
+          "enum": ["none", "self", "tenant", "organisation", "external"],
+          "description": "What surface is affected by this tool's side effects."
+        },
+        "description": {
+          "type": "string",
+          "description": "Freeform detail. 'Sends email to any address' vs 'Sends email only to verified tenant members' look alike by scope but differ by description."
+        }
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "properties": {
+        "available": {"type": "boolean"},
+        "fidelity": {
+          "enum": ["none", "stub", "recorded", "simulated", "real-isolated"],
+          "description": "Quality of the sandbox. 'stub' = always-success mocks; 'recorded' = replays captured responses; 'real-isolated' = real tool against an isolated environment."
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "allowedInModes": {
+      "type": "array",
+      "items": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
+      "description": "Modes in which this tool may be invoked. Irreversible external tools typically forbid 'sandboxed-live' unless sandbox fidelity is 'real-isolated'."
+    }
+  },
+  "additionalProperties": false
+}

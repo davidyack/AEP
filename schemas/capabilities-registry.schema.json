@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/capabilities-registry.schema.json",
+  "title": "CapabilitiesRegistry",
+  "description": "Structured declaration of what an agent can do, intended for evaluator discovery and scenario targeting. An AEP-compliant agent MUST publish this as part of its AgentContract. Capabilities here are evaluation-facing (what the agent claims to handle) and are distinct from MCP tool capabilities (what external tools the agent invokes).",
+  "type": "object",
+  "required": ["domains", "actions", "modalities"],
+  "properties": {
+    "domains": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/Domain"},
+      "minItems": 1,
+      "description": "Subject-matter areas this agent claims competence in. MUST be non-empty. Evaluators MUST NOT score against domains not declared here."
+    },
+    "actions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/Action"},
+      "minItems": 1,
+      "description": "Verbs the agent claims to perform. MUST be non-empty."
+    },
+    "modalities": {
+      "type": "array",
+      "items": {"enum": ["text", "voice", "image", "code", "file", "tool-use", "structured-data"]},
+      "minItems": 1,
+      "description": "I/O modalities supported. Text is the baseline; any agent supporting evaluation MUST support text."
+    },
+    "languages": {
+      "type": "array",
+      "items": {"type": "string", "description": "BCP 47 language tag."},
+      "description": "Natural languages the agent commits to handling. Evaluators SHOULD NOT submit scenarios in undeclared languages."
+    },
+    "outOfScope": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Domains or actions the agent explicitly disclaims. Findings claiming failure in these areas SHOULD be rejected by triage."
+    },
+    "qualityClaims": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/QualityClaim"},
+      "description": "Self-reported quality levels per domain/action. Evaluators MAY verify these."
+    }
+  },
+  "$defs": {
+    "Domain": {
+      "type": "object",
+      "required": ["id", "description"],
+      "properties": {
+        "id": {"type": "string", "description": "Short identifier, e.g. 'code-review', 'customer-support', 'legal-drafting'."},
+        "description": {"type": "string"},
+        "subdomains": {"type": "array", "items": {"type": "string"}},
+        "confidence": {
+          "enum": ["experimental", "baseline", "production", "specialised"],
+          "description": "Maturity level for this domain."
+        }
+      }
+    },
+    "Action": {
+      "type": "object",
+      "required": ["id", "description"],
+      "properties": {
+        "id": {"type": "string", "description": "Short identifier, e.g. 'summarize', 'classify', 'generate', 'extract', 'reason', 'refuse'."},
+        "description": {"type": "string"},
+        "inputContract": {"type": "string", "description": "Reference to a JSON Schema or description of input shape for this action."},
+        "outputContract": {"type": "string", "description": "Reference to a JSON Schema or description of output shape."}
+      }
+    },
+    "QualityClaim": {
+      "type": "object",
+      "required": ["domainId", "actionId", "level"],
+      "properties": {
+        "domainId": {"type": "string"},
+        "actionId": {"type": "string"},
+        "level": {"enum": ["experimental", "acceptable", "strong", "expert"]},
+        "evidence": {"type": "string", "description": "Pointer to benchmark results or evaluation reports."}
+      }
+    }
+  },
+  "additionalProperties": false
+}

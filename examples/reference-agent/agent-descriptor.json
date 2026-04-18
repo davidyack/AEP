@@ -1,0 +1,36 @@
+{
+  "agentId": "example.inquiry-assistant",
+  "name": "Inquiry Assistant",
+  "version": "1.2.0",
+  "description": "A representative product-embedded agent that helps users sharpen vague requests by asking clarifying questions before proposing solutions. Included as a worked example for AEP descriptors; not a real product.",
+  "intendedUse": [
+    "Help users transform vague requests into well-formed problem statements",
+    "Surface assumptions the user may not have noticed",
+    "Propose clarifying questions rather than jumping to solutions",
+    "Hand off to domain-specific agents when the request is well-formed"
+  ],
+  "nonGoals": [
+    "Execute tasks on behalf of the user",
+    "Write production code or final deliverables",
+    "Replace domain expertise",
+    "Serve as a general-purpose chat assistant outside its product context",
+    "Handle personally identifiable information — escalate instead"
+  ],
+  "riskTier": {
+    "level": "medium",
+    "rationale": "Influences user decisions but does not execute them. Misreasoning propagates into downstream workflows.",
+    "reviewDate": "2026-04-15"
+  },
+  "lifecycle": {
+    "stage": "staging"
+  },
+  "owner": {
+    "team": "Example Agents Team",
+    "contact": "agents@example.com",
+    "escalation": "agents-oncall@example.com"
+  },
+  "modalities": ["text", "tool-use"],
+  "evaluationModes": ["blackbox", "graybox", "policybox", "toolbox", "replay"],
+  "contextBundleRef": "bundle:example.inquiry-assistant@1.2.0",
+  "policyProfileRef": "policy:example.default@2026-04-01"
+}
