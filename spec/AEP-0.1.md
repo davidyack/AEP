@@ -464,7 +464,7 @@ This is the protocol's anchor: when a reviewer asks "what is the single source o
 
 **AEP-REQ-113**: Every piece of session-scoped information returned by any AEP surface — turn response payloads, streaming events, evaluation results, findings, artifacts — MUST be either present in the Trace or mechanically derivable from it. Servers MUST NOT return session-scoped information that has no Trace representation.
 
-**AEP-REQ-124**: Sealed traces MUST be signed over a canonical serialization. At sealing time, servers MUST canonicalize the Trace using a deterministic JSON canonicalization method, compute a digest over those canonical bytes, and attach a signature object containing at least `{ alg, kid, sig }` where `kid` identifies the signing key.
+**AEP-REQ-124**: Sealed traces MUST be signed over a canonical serialization. At sealing time, servers MUST canonicalize the Trace using RFC 8785 (JSON Canonicalization Scheme, JCS), compute a digest over those canonical bytes, and attach a signature object containing at least `{ alg, kid, sig }` where `kid` identifies the signing key.
 
 **AEP-REQ-125**: Trace signature verification MUST gate integrity-sensitive operations (at minimum: trace retrieval and replay). If canonical-digest or signature verification fails, servers MUST reject with `-32050 replay_integrity_violation`.
 
@@ -770,6 +770,8 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 **AEP-REQ-086**: AEP endpoints MUST NOT be reachable from public production traffic paths.
 
 **AEP-REQ-087**: Servers MUST detect production environments at startup and refuse to start unless an explicit, auditable override is configured; overrides MUST be logged.
+
+Production-environment detection SHOULD be policy-driven (configuration and deployment metadata), not heuristic-only. Typical signals include explicit environment flags, deployment profile markers, or workload metadata from the hosting platform.
 
 **AEP-REQ-129**: AEP deployment MUST satisfy all of the following invariants:
 (a) evaluation endpoints are served on infrastructure logically separated from user-facing production APIs (separate origin, hostname, or network segment),

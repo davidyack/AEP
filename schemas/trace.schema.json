@@ -51,7 +51,7 @@
     },
     "canonicalDigest": {
       "type": "string",
-      "pattern": "^sha256:[A-Fa-f0-9]{64}$",
+      "pattern": "^(sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128})$",
       "description": "Digest over canonical serialized bytes (AEP-REQ-124)."
     },
     "signature": {
@@ -308,7 +308,7 @@
         },
         "originalDigest": {
           "type": "string",
-          "pattern": "^sha256:[A-Fa-f0-9]{64}$",
+          "pattern": "^(sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128})$",
           "description": "Digest of original redacted payload when retained for audit."
         },
         "sensitivity": {
