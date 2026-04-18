@@ -19,12 +19,12 @@
     "traceId": {
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{22,128}$",
-      "description": "Opaque high-entropy trace reference (AEP-REQ-126)."
+      "description": "Opaque high-entropy trace reference (AEP-REQ-126). Implementations MUST ensure at least 128 bits of unpredictability regardless of textual length."
     },
     "sessionId": {
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{22,128}$",
-      "description": "Opaque high-entropy session reference (AEP-REQ-126)."
+      "description": "Opaque high-entropy session reference (AEP-REQ-126). Implementations MUST ensure at least 128 bits of unpredictability regardless of textual length."
     },
     "aepVersion": {"type": "string"},
     "agentId": {
@@ -263,7 +263,7 @@
       "properties": {
         "alg": {
           "type": "string",
-          "enum": ["Ed25519", "ES256"]
+          "enum": ["Ed25519", "ES256", "ES384"]
         },
         "kid": {
           "type": "string",

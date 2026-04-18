@@ -464,13 +464,13 @@ This is the protocol's anchor: when a reviewer asks "what is the single source o
 
 **AEP-REQ-113**: Every piece of session-scoped information returned by any AEP surface — turn response payloads, streaming events, evaluation results, findings, artifacts — MUST be either present in the Trace or mechanically derivable from it. Servers MUST NOT return session-scoped information that has no Trace representation.
 
-**AEP-REQ-124**: Sealed traces MUST be signed over a canonical serialization. At sealing time, servers MUST canonicalize the Trace using RFC 8785 (JSON Canonicalization Scheme, JCS), compute a digest over those canonical bytes, and attach a signature object containing at least `{ alg, kid, sig }` where `kid` identifies the signing key.
+**AEP-REQ-124**: Sealed traces MUST be signed over a canonical serialization. At sealing time, servers MUST canonicalize the Trace using RFC 8785 (JSON Canonicalization Scheme, JCS), compute a digest over those canonical bytes using SHA-256 or stronger (`sha256`, `sha384`, or `sha512`), and attach a signature object containing at least `{ alg, kid, sig }` where `kid` identifies the signing key.
 
 **AEP-REQ-125**: Trace signature verification MUST gate integrity-sensitive operations (at minimum: trace retrieval and replay). If canonical-digest or signature verification fails, servers MUST reject with `-32050 replay_integrity_violation`.
 
 **AEP-REQ-126**: Session, trace, result, and evidence-target references (`sessionId`, `traceId`/`traceRef`, `resultId`/`resultRef`, and evidence `targetRef`) MUST be opaque, non-sequential, and high-entropy (minimum 128 bits of unpredictability). Implementations MUST NOT encode tenant, agent, timestamp, or other meaningful metadata directly in these references.
 
-**AEP-REQ-127**: Trace redaction and sensitivity labeling are first-class protocol concerns. Traces MUST support explicit sensitivity labels and explicit redaction records that identify what was redacted, why, and when. When content is redacted, the Trace SHOULD retain a digest of the original redacted payload so integrity and replay audits remain possible without exposing sensitive content.
+**AEP-REQ-127**: Trace redaction and sensitivity labeling are first-class protocol concerns. Traces MUST support explicit sensitivity labels and explicit redaction records that identify what was redacted, why, and when. For traces intended to support integrity or replay audits, the Trace MUST retain a digest of each original redacted payload so verification remains possible without exposing sensitive content.
 
 ## 11. Optional Extensions
 
@@ -776,7 +776,7 @@ Production-environment detection SHOULD be policy-driven (configuration and depl
 **AEP-REQ-129**: AEP deployment MUST satisfy all of the following invariants:
 (a) evaluation endpoints are served on infrastructure logically separated from user-facing production APIs (separate origin, hostname, or network segment),
 (b) ingress to AEP endpoints is restricted to approved evaluator identities or private network boundaries,
-(c) default-deny routing is in effect (new routes are not exposed without explicit allow-listing).
+(c) default-deny routing is in effect (new routes are not exposed without explicit allowlisting).
 
 **AEP-REQ-130**: Production and evaluation credentials MUST be audience-separated and non-interchangeable. Credentials minted for production user traffic MUST NOT authorize AEP endpoints, and AEP evaluator credentials MUST NOT authorize production user endpoints.
 
