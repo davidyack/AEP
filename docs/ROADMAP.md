@@ -21,7 +21,7 @@ Working document. Priorities reflect current understanding; order is a signal, n
 
 1. **Companion reference implementation repository.** A minimal compliant server and client in a separate `aep-reference` repo. Kept separate so the spec can evolve without being coupled to a specific implementation's test harness. **This is the highest-priority v0.2 deliverable** — the spec is currently impressive-on-paper but the most common adopter question ("show me the smallest working pair") doesn't yet have an answer.
 
-2. **Canonical trace serialisation format.** v0.1 specifies what a Trace contains; v0.2 needs a canonical wire format for sharing traces across implementations, including efficient binary framing for large traces.
+2. **Large-trace transport framing.** v0.1 now defines canonical serialization + signing semantics for Trace integrity; v0.2 focuses on efficient binary framing/chunking for very large traces.
 
 3. **Streaming extensions.** v0.1 specifies SSE streaming (§11.5) with event registry, heartbeat, resume, and trace equivalence. v0.2 adds early-abort signalling, bidirectional streaming for interactive evaluation, and cross-session streams for dashboard use cases. See spec §11.8.
 

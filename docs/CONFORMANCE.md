@@ -76,6 +76,11 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-045 | Traces carry minimum required fields | §10 |
 | AEP-REQ-046 | Mode-aware replay authorization | §10 |
 | AEP-REQ-047 | Retain sealed traces ≥7 days | §10 |
+| AEP-REQ-124 | Sealed traces are canonically serialized and signed with key ID (`kid`) | §10 |
+| AEP-REQ-125 | Verify trace canonical digest/signature on retrieval and replay | §10 |
+| AEP-REQ-126 | Session/trace/result/evidence refs are opaque high-entropy identifiers | §10 |
+| AEP-REQ-127 | Trace sensitivity labels and redaction records are first-class | §10 |
+| AEP-REQ-128 | Unauthorized artifact fetches return existence-hiding not-found semantics | §7.5 |
 | AEP-REQ-059 | Support trace-faithful replay (required baseline) | §11.4 |
 | AEP-REQ-062 | Deterministic replay blocks live tool calls; -32050 | §11.4 |
 | AEP-REQ-063 | Replay Results declare traceCompleteness | §11.4 |
@@ -84,6 +89,7 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-081 | Never leak internal details in errors | §12 |
 | AEP-REQ-085 | Record errors in Trace | §12.3 |
 | AEP-REQ-086 | No public production exposure | §13.1 |
+| AEP-REQ-087 | Refuse startup in production without explicit auditable override | §13.1 |
 | AEP-REQ-088 | Per-agent, per-mode authorization independent | §13.2 |
 | AEP-REQ-089 | Preserve tenant boundaries on artifact retrieval | §13.2 |
 | AEP-REQ-090 | Log authorization decisions | §13.2 |
@@ -114,6 +120,8 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-121 | Servers SHOULD support ephemeral evaluator tokens | §13.8 |
 | AEP-REQ-122 | Servers SHOULD support scoped evaluation sessions | §13.8 |
 | AEP-REQ-123 | Servers SHOULD support time-bound access | §13.8 |
+| AEP-REQ-129 | Enforce non-production deployment invariants (separation, restricted ingress, default-deny routing) | §13.1 |
+| AEP-REQ-130 | Production/evaluation credentials are audience-separated and non-interchangeable | §13.1 |
 
 ### AEP-Evaluator (client)
 

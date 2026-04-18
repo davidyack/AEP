@@ -16,8 +16,16 @@
     "startedAt"
   ],
   "properties": {
-    "traceId": {"type": "string"},
-    "sessionId": {"type": "string"},
+    "traceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,128}$",
+      "description": "Opaque high-entropy trace reference (AEP-REQ-126). Implementations MUST ensure at least 128 bits of unpredictability regardless of textual length."
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,128}$",
+      "description": "Opaque high-entropy session reference (AEP-REQ-126). Implementations MUST ensure at least 128 bits of unpredictability regardless of textual length."
+    },
     "aepVersion": {"type": "string"},
     "agentId": {
       "type": "string",
@@ -36,6 +44,20 @@
       "description": "Once true, the trace is immutable. Servers MUST reject any mutation attempts."
     },
     "sealedAt": {"type": "string", "format": "date-time"},
+    "canonicalSerialization": {
+      "type": "string",
+      "description": "Canonical serialization method used for signing (AEP-REQ-124). v0.1 allows JCS-RFC8785; future versions may add values.",
+      "enum": ["JCS-RFC8785"]
+    },
+    "canonicalDigest": {
+      "type": "string",
+      "pattern": "^(sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128})$",
+      "description": "Digest over canonical serialized bytes (AEP-REQ-124)."
+    },
+    "signature": {
+      "$ref": "#/$defs/SignatureEnvelope",
+      "description": "Signature over canonicalDigest with key identifier kid (AEP-REQ-124)."
+    },
     "startedAt": {"type": "string", "format": "date-time"},
     "completedAt": {"type": "string", "format": "date-time"},
     "injectedContext": {
@@ -53,6 +75,15 @@
     "finalOutcome": {
       "$ref": "#/$defs/FinalOutcome",
       "description": "Canonical completion record for the session. Required even for failed and aborted sessions."
+    },
+    "sensitivity": {
+      "$ref": "#/$defs/SensitivityLabel",
+      "description": "Overall trace sensitivity classification (AEP-REQ-127)."
+    },
+    "redactions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/RedactionRecord"},
+      "description": "Explicit redaction records for sensitive content removed from this trace (AEP-REQ-127)."
     },
     "decisionPath": {
       "type": "array",
@@ -105,6 +136,12 @@
         "stateSnapshot": {
           "type": "object",
           "description": "Captured agent state after this turn. Required for deterministic replay of multi-turn sessions."
+        },
+        "inputSensitivity": {
+          "$ref": "#/$defs/SensitivityLabel"
+        },
+        "outputSensitivity": {
+          "$ref": "#/$defs/SensitivityLabel"
         }
       }
     },
@@ -219,7 +256,79 @@
           }
         }
       }
+    },
+    "SignatureEnvelope": {
+      "type": "object",
+      "required": ["alg", "kid", "sig"],
+      "properties": {
+        "alg": {
+          "type": "string",
+          "enum": ["Ed25519", "ES256", "ES384"]
+        },
+        "kid": {
+          "type": "string",
+          "description": "Signing key identifier (AEP-REQ-124)."
+        },
+        "sig": {
+          "type": "string",
+          "description": "Base64url-encoded signature bytes."
+        }
+      },
+      "additionalProperties": false
+    },
+    "SensitivityLabel": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "level": {
+          "enum": ["public", "internal", "confidential", "restricted"]
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "RedactionRecord": {
+      "type": "object",
+      "required": ["path", "reason", "redactedAt"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "JSON pointer or trace path of the redacted field."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why redaction was applied."
+        },
+        "redactedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "originalDigest": {
+          "type": "string",
+          "pattern": "^(sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128})$",
+          "description": "Digest of original redacted payload when retained for audit."
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/SensitivityLabel"
+        }
+      },
+      "additionalProperties": false
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "sealed": {"const": true}
+        }
+      },
+      "then": {
+        "required": ["sealedAt", "canonicalSerialization", "canonicalDigest", "signature"]
+      }
+    }
+  ],
   "additionalProperties": false
 }
