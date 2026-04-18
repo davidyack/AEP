@@ -46,8 +46,8 @@
     "sealedAt": {"type": "string", "format": "date-time"},
     "canonicalSerialization": {
       "type": "string",
-      "description": "Canonical serialization method used for signing (AEP-REQ-124).",
-      "const": "JCS-RFC8785"
+      "description": "Canonical serialization method used for signing (AEP-REQ-124). v0.1 allows JCS-RFC8785; future versions may add values.",
+      "enum": ["JCS-RFC8785"]
     },
     "canonicalDigest": {
       "type": "string",
