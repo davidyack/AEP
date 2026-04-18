@@ -56,7 +56,7 @@
           "type": "object",
           "required": ["sessionId", "agentId", "agentVersion", "testMode", "startedAt"],
           "properties": {
-            "sessionId": {"type": "string"},
+            "sessionId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"},
             "agentId": {"type": "string"},
             "agentVersion": {"type": "string"},
             "testMode": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
@@ -172,8 +172,8 @@
           "type": "object",
           "required": ["sessionId", "resultRef"],
           "properties": {
-            "sessionId": {"type": "string"},
-            "resultRef": {"type": "string"}
+            "sessionId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"},
+            "resultRef": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"}
           }
         }
       }
@@ -218,7 +218,7 @@
           "properties": {
             "reason": {"enum": ["session-complete", "session-aborted", "client-disconnect", "server-shutdown"]},
             "sealed": {"type": "boolean", "description": "Whether the corresponding Trace has been sealed and is retrievable."},
-            "traceRef": {"type": "string", "description": "Reference to the sealed Trace, if sealed=true."}
+            "traceRef": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$", "description": "Reference to the sealed Trace, if sealed=true."}
           }
         }
       }

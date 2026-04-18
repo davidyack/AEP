@@ -327,6 +327,8 @@ GET /aep/sessions/{sessionId}/findings  → Finding[]
 
 Servers supporting the Streaming extension (§11.5) additionally expose `GET /aep/sessions/{sessionId}/events` as a Server-Sent Events stream. Streaming is additive; sealed artifacts are always retrievable via the endpoints above regardless of streaming support.
 
+**AEP-REQ-128**: Artifact retrieval endpoints (`GET /aep/traces/{traceRef}`, `GET /aep/results/{resultRef}`, `GET /aep/sessions/{sessionId}/findings`) MUST apply existence-hiding authorization semantics. If the caller is unauthorized, the server MUST return `-32001 agent_not_found` (or HTTP 404 on REST mapping) rather than `-32010`, so unauthorized callers cannot distinguish "exists but forbidden" from "does not exist".
+
 ### 7.6 JSON-RPC surface
 
 All operations above are also callable via JSON-RPC 2.0 at `POST /aep/rpc`:
@@ -461,6 +463,14 @@ This is the protocol's anchor: when a reviewer asks "what is the single source o
 **AEP-REQ-047**: Sealed traces MUST be retrievable for at least 7 days. Implementations MAY retain longer.
 
 **AEP-REQ-113**: Every piece of session-scoped information returned by any AEP surface — turn response payloads, streaming events, evaluation results, findings, artifacts — MUST be either present in the Trace or mechanically derivable from it. Servers MUST NOT return session-scoped information that has no Trace representation.
+
+**AEP-REQ-124**: Sealed traces MUST be signed over a canonical serialization. At sealing time, servers MUST canonicalize the Trace using a deterministic JSON canonicalization method, compute a digest over those canonical bytes, and attach a signature object containing at least `{ alg, kid, sig }` where `kid` identifies the signing key.
+
+**AEP-REQ-125**: Trace signature verification MUST gate integrity-sensitive operations (at minimum: trace retrieval and replay). If canonical-digest or signature verification fails, servers MUST reject with `-32050 replay_integrity_violation`.
+
+**AEP-REQ-126**: Session, trace, result, and evidence-target references (`sessionId`, `traceId`/`traceRef`, `resultId`/`resultRef`, and evidence `targetRef`) MUST be opaque, non-sequential, and high-entropy (minimum 128 bits of unpredictability). Implementations MUST NOT encode tenant, agent, timestamp, or other meaningful metadata directly in these references.
+
+**AEP-REQ-127**: Trace redaction and sensitivity labeling are first-class protocol concerns. Traces MUST support explicit sensitivity labels and explicit redaction records that identify what was redacted, why, and when. When content is redacted, the Trace SHOULD retain a digest of the original redacted payload so integrity and replay audits remain possible without exposing sensitive content.
 
 ## 11. Optional Extensions
 
@@ -707,7 +717,7 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 
 | Code | Name | Category | Retry |
 |------|------|----------|-------|
-| -32001 | `agent_not_found` | Discovery | No |
+| -32001 | `agent_not_found` | Discovery / existence-hiding artifact fetch | No |
 | -32002 | `session_expired` | Lifecycle | No (create new) |
 | -32003 | `mode_not_supported` | Modes | No |
 | -32005 | `scenario_invalid` | Input | No |
@@ -759,7 +769,14 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 
 **AEP-REQ-086**: AEP endpoints MUST NOT be reachable from public production traffic paths.
 
-**AEP-REQ-087**: Servers SHOULD detect production environments at startup and refuse to start without explicit override; overrides MUST be logged.
+**AEP-REQ-087**: Servers MUST detect production environments at startup and refuse to start unless an explicit, auditable override is configured; overrides MUST be logged.
+
+**AEP-REQ-129**: AEP deployment MUST satisfy all of the following invariants:
+(a) evaluation endpoints are served on infrastructure logically separated from user-facing production APIs (separate origin, hostname, or network segment),
+(b) ingress to AEP endpoints is restricted to approved evaluator identities or private network boundaries,
+(c) default-deny routing is in effect (new routes are not exposed without explicit allow-listing).
+
+**AEP-REQ-130**: Production and evaluation credentials MUST be audience-separated and non-interchangeable. Credentials minted for production user traffic MUST NOT authorize AEP endpoints, and AEP evaluator credentials MUST NOT authorize production user endpoints.
 
 ### 13.2 Authorization
 
@@ -873,7 +890,7 @@ A conformance test suite is planned for v0.2. Each test will reference an AEP-RE
 
 The following are known design gaps carried to v0.2:
 
-1. Canonical trace serialisation format (binary framing for large traces)
+1. Binary framing and chunking guidance for very large canonical traces
 2. Early-abort signalling via the streaming extension (§11.5)
 3. Cost attribution as a first-class protocol concern
 4. Multi-agent coordination scenarios

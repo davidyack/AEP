@@ -10,8 +10,16 @@
     "status"
   ],
   "properties": {
-    "resultId": {"type": "string"},
-    "sessionId": {"type": "string"},
+    "resultId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,128}$",
+      "description": "Opaque high-entropy result reference (AEP-REQ-126)."
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,128}$",
+      "description": "Opaque high-entropy session reference (AEP-REQ-126)."
+    },
     "status": {
       "enum": ["pending", "ready"],
       "description": "Polling status for the result artifact. pending = scoring still in progress. ready = terminal EvaluationResult content is available."
@@ -56,8 +64,15 @@
         }
       }
     },
-    "traceRef": {"type": "string"},
-    "findingsRef": {"type": "string", "description": "Pointer to the full findings collection for this session."},
+    "traceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,128}$"
+    },
+    "findingsRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,128}$",
+      "description": "Opaque high-entropy pointer to the full findings collection for this session."
+    },
     "producedAt": {"type": "string", "format": "date-time"},
     "producedBy": {"type": "string", "description": "Identifier of the scoring engine or evaluator that produced this result."},
     "reproducibility": {

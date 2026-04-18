@@ -19,7 +19,7 @@
       "type": "array",
       "items": {"$ref": "#/$defs/EvidencePointer"},
       "minItems": 1,
-      "description": "Typed pointers into artifacts. Not opaque strings."
+      "description": "Typed pointers into artifacts with opaque high-entropy evidence target references."
     },
     "reproducible": {
       "type": "object",
@@ -50,40 +50,44 @@
       "oneOf": [
         {
           "type": "object",
-          "required": ["type", "traceRef", "turnIndex"],
+          "required": ["type", "traceRef", "turnIndex", "targetRef"],
           "properties": {
             "type": {"const": "trace-turn"},
-            "traceRef": {"type": "string"},
-            "turnIndex": {"type": "integer", "minimum": 0}
+            "traceRef": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"},
+            "turnIndex": {"type": "integer", "minimum": 0},
+            "targetRef": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"}
           }
         },
         {
           "type": "object",
-          "required": ["type", "traceRef", "turnIndex", "toolCallId"],
+          "required": ["type", "traceRef", "turnIndex", "toolCallId", "targetRef"],
           "properties": {
             "type": {"const": "tool-call"},
-            "traceRef": {"type": "string"},
+            "traceRef": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"},
             "turnIndex": {"type": "integer", "minimum": 0},
-            "toolCallId": {"type": "string"}
+            "toolCallId": {"type": "string"},
+            "targetRef": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"}
           }
         },
         {
           "type": "object",
-          "required": ["type", "traceRef", "turnIndex", "policyEventId"],
+          "required": ["type", "traceRef", "turnIndex", "policyEventId", "targetRef"],
           "properties": {
             "type": {"const": "policy-event"},
-            "traceRef": {"type": "string"},
+            "traceRef": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"},
             "turnIndex": {"type": "integer", "minimum": 0},
-            "policyEventId": {"type": "string"}
+            "policyEventId": {"type": "string"},
+            "targetRef": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"}
           }
         },
         {
           "type": "object",
-          "required": ["type", "uri"],
+          "required": ["type", "uri", "targetRef"],
           "properties": {
             "type": {"const": "external"},
             "uri": {"type": "string", "format": "uri"},
-            "description": {"type": "string"}
+            "description": {"type": "string"},
+            "targetRef": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"}
           }
         }
       ]

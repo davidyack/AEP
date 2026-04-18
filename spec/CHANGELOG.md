@@ -33,3 +33,13 @@ Optional: `policy-profile`, `tool-capability`, `stream-event`, `dataset`.
 - Cost attribution as a first-class concern
 - Full Composite Session Evaluation (CSE) extension specification (v0.1 core provides the hooks; the extension itself is a companion document)
 - Cross-version replay semantics
+
+## [Unreleased]
+
+### Security and artifact hardening
+
+- Added normative requirements for **signed sealed traces** using canonical serialization, digesting, and signature envelopes with key IDs (`kid`).
+- Added normative requirement that **session, trace, result, and evidence-target references** are opaque, non-sequential, and high-entropy.
+- Added first-class **trace sensitivity labeling and redaction records** requirements.
+- Added **artifact retrieval existence-hiding semantics** so unauthorized trace/result/finding fetches return not-found behavior instead of authorization disclosures.
+- Strengthened **non-production exposure** requirements into concrete deployment invariants (environment refusal defaults, ingress restrictions, separation, and audience-separated credentials).

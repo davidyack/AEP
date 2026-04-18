@@ -19,7 +19,8 @@
   "properties": {
     "sessionId": {
       "type": "string",
-      "description": "Server-assigned unique identifier. MUST be unpredictable (no sequential IDs)."
+      "pattern": "^[A-Za-z0-9_-]{22,128}$",
+      "description": "Server-assigned unique identifier. MUST be opaque and high-entropy (AEP-REQ-126)."
     },
     "aepVersion": {"type": "string"},
     "agentId": {
@@ -95,8 +96,16 @@
     "lifecycle": {
       "$ref": "#/$defs/LifecycleRecord"
     },
-    "traceRef": {"type": "string", "description": "Pointer to the trace artifact."},
-    "resultRef": {"type": "string", "description": "Pointer to the EvaluationResult once the session is completed."},
+    "traceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,128}$",
+      "description": "Opaque high-entropy pointer to the trace artifact (AEP-REQ-126)."
+    },
+    "resultRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,128}$",
+      "description": "Opaque high-entropy pointer to the EvaluationResult once the session is completed (AEP-REQ-126)."
+    },
     "limits": {
       "type": "object",
       "properties": {

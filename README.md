@@ -110,7 +110,7 @@ v0.1. First public draft — April 2026. The spec is normative and self-containe
 
 **What's not here yet:** a reference implementation. The most common next question after "is the spec sound?" is "show me the smallest working server/client pair." That will live in a companion `aep-reference` repository, not in this one, so the spec can evolve without being coupled to any single implementation's test harness. Tracking in [`docs/ROADMAP.md`](./docs/ROADMAP.md); this is the highest-priority v0.2 deliverable.
 
-Other v0.2 work: conformance test suite (each test cites an `AEP-REQ-NNN`), canonical binary trace serialisation, cost attribution as a protocol concern. See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the full list.
+Other v0.2 work: conformance test suite (each test cites an `AEP-REQ-NNN`), binary framing/chunking for very large canonical traces, cost attribution as a protocol concern. See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the full list.
 
 ## Attribution
 
