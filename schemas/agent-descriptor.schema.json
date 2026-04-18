@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aep.dev/schemas/agent-descriptor.schema.json",
   "title": "AgentDescriptor",
-  "description": "Identifies and summarises an agent available for evaluation.",
+  "description": "Identifies and summarizes an agent available for evaluation.",
   "type": "object",
   "required": ["agentId", "name", "version", "description", "intendedUse", "nonGoals", "riskTier", "lifecycle", "owner"],
   "properties": {

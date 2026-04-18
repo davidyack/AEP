@@ -18,7 +18,7 @@ Four concrete uses drive the design:
 
 3. **Re-scoring.** A new rubric exists. How does it score the historical corpus? Run the rubric against captured traces without touching the agent.
 
-4. **Cheap regression detection.** Before an agent change lands, replay the prior version's traces against the new version and flag behavioural divergence. Cheaper than re-running the full scenario suite from scratch.
+4. **Cheap regression detection.** Before an agent change lands, replay the prior version's traces against the new version and flag behavioral divergence. Cheaper than re-running the full scenario suite from scratch.
 
 The common thread: replay lets evidence be re-examined without re-execution. This only works if the trace captures enough.
 
@@ -28,7 +28,7 @@ Three distinct claims get conflated:
 
 1. **Byte-identical output** — the agent produces the exact same bytes given the same input + context + seed. This is rare in practice; even deterministic models can produce different outputs due to floating-point non-associativity across hardware.
 
-2. **Behaviourally equivalent output** — the agent produces semantically equivalent output that would receive the same finding under the same rubric. This is usually what's wanted.
+2. **Behaviorally equivalent output** — the agent produces semantically equivalent output that would receive the same finding under the same rubric. This is usually what's wanted.
 
 3. **Trace-faithful replay** — the agent is not re-executed at all; the captured trace is replayed as a recording. Whatever the original run did, the replay shows.
 
@@ -70,9 +70,9 @@ Sealed traces are immutable. Mutation attempts fail with error `-32006`. This is
 
 If a replay attempts to invoke a tool call not in the captured trace, the server **MUST** raise `-32050 replay_integrity_violation` rather than silently call the live tool. The alternative — "replay mostly the recording, but fall through on misses" — produces results that are neither replay nor live, and is impossible to reason about.
 
-### Mode-aware replay authorisation
+### Mode-aware replay authorization
 
-A trace captured in `toolbox` mode **MUST NOT** be replayable by a caller authorised only for `blackbox`. This prevents information that was visible in the original run from leaking to parties who shouldn't see it through the replay mechanism.
+A trace captured in `toolbox` mode **MUST NOT** be replayable by a caller authorized only for `blackbox`. This prevents information that was visible in the original run from leaking to parties who shouldn't see it through the replay mechanism.
 
 ## Design decisions deferred
 
@@ -86,11 +86,11 @@ What happens when you replay a trace captured against agent v1 using agent v2? v
 
 ### Partial replay
 
-Replaying only turns 3-5 of a 10-turn trace is not specified. It raises questions about state initialisation (you're starting from the captured turn-2 state, which may embed assumptions) that the v0.1 spec doesn't address.
+Replaying only turns 3-5 of a 10-turn trace is not specified. It raises questions about state initialization (you're starting from the captured turn-2 state, which may embed assumptions) that the v0.1 spec doesn't address.
 
 ### Non-determinism budgeting
 
-A stochastic agent may produce different outputs on re-execution that are "close enough." What counts as close? v0.1 punts: stochastic agents can only do trace-faithful replay. Future versions may introduce a configurable tolerance for behavioural-equivalence claims.
+A stochastic agent may produce different outputs on re-execution that are "close enough." What counts as close? v0.1 punts: stochastic agents can only do trace-faithful replay. Future versions may introduce a configurable tolerance for behavioral-equivalence claims.
 
 ### Replay of external tool effects
 
@@ -104,14 +104,14 @@ Known ways replay goes wrong, each with its mitigation:
 |---------|-----------|
 | Trace incomplete | Server refuses to produce an EvaluationResult claiming `traceCompleteness: "complete"` unless every required field is present |
 | Trace drifted from agent version | Trace carries `agentVersion`; replay warns on version mismatch |
-| Replay divergence due to non-determinism | `DeterminismDeclaration` makes the expected behaviour explicit |
+| Replay divergence due to non-determinism | `DeterminismDeclaration` makes the expected behavior explicit |
 | Replay against a deprecated agent | Servers **MAY** refuse replay against agents with `lifecycle.stage: "deprecated"` after a retention window |
 | Tool-call mismatch at replay time | Error `-32050` rather than fall-through |
 
 ## What replay is not
 
 - Replay is not a time machine. It reproduces what was captured, not what the system currently is.
-- Replay is not verification. A replayed run passing a rubric means the captured behaviour passes; it does not certify current behaviour.
+- Replay is not verification. A replayed run passing a rubric means the captured behavior passes; it does not certify current behavior.
 - Replay is not a substitute for live testing. Live tests catch what capture missed; replay catches what capture got right.
 
 The design is modest on purpose. Modest replay that works beats ambitious replay that sometimes does.

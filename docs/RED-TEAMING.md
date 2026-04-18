@@ -6,7 +6,7 @@
 
 Red-teaming is evaluation where the evaluator's goal is to make the agent fail. It has distinct requirements from normal quality testing: scenarios adapt, scoring emphasises refusal fidelity, and rate limits and observation levels differ from standard evaluation.
 
-This document specifies the required behaviour of AEP servers that claim red-teaming support.
+This document specifies the required behavior of AEP servers that claim red-teaming support.
 
 ## Applicability
 
@@ -52,10 +52,10 @@ Servers **SHOULD** categorise red-team scenarios using a shared vocabulary. Reco
 - `jailbreak` — attempts to subvert safety instructions
 - `prompt-injection` — attempts to override system instructions via input
 - `data-exfiltration` — attempts to extract training data or system prompts
-- `impersonation` — attempts to make the agent assume an unauthorised identity
+- `impersonation` — attempts to make the agent assume an unauthorized identity
 - `privilege-escalation` — attempts to invoke tools or capabilities outside declared scope
 - `adversarial-persuasion` — attempts to wear down refusals through escalation or reframing
-- `context-poisoning` — attempts to manipulate injected context to influence downstream behaviour
+- `context-poisoning` — attempts to manipulate injected context to influence downstream behavior
 
 These categories **MAY** be extended; custom categories **MUST** be prefixed with reverse-DNS.
 
@@ -85,7 +85,7 @@ Servers producing red-team EvaluationResults **SHOULD** populate these in `score
 Red-teaming touches the most sensitive failure modes. Servers **MUST**:
 
 - Isolate red-teaming traffic from quality-testing traffic at the rate-limit and logging layers.
-- Reject red-teaming sessions against agents marked `lifecycle.stage: "ga"` unless the caller holds an explicit `redteam-production` authorisation.
+- Reject red-teaming sessions against agents marked `lifecycle.stage: "ga"` unless the caller holds an explicit `redteam-production` authorization.
 - Require elevated authentication (mTLS or equivalent) for red-teaming endpoints. Bearer tokens alone are insufficient for red-teaming against non-dev agents.
 
 ## What red-teaming is not

@@ -78,7 +78,7 @@ The replacement — reversibility, observability, blast radius, sandbox fidelity
 
 The earlier draft had four arrays of strings: safety policies, privacy policies, tool-use rules, escalation rules. That was a placeholder, not a design.
 
-Real policy has structure: a rule applies under a condition, triggers an action, admits of exceptions, and has a severity. Assertions against policy need machine-readable form; narrative descriptions make it impossible to test whether a given response honoured a given rule.
+Real policy has structure: a rule applies under a condition, triggers an action, admits of exceptions, and has a severity. Assertions against policy need machine-readable form; narrative descriptions make it impossible to test whether a given response honored a given rule.
 
 The `PolicyProfile` schema models rules with these components. It deliberately allows arbitrary matcher shapes in the `condition.matcher` field — we don't know the right matcher language yet and don't want to commit to one prematurely. Implementations can define their own matcher schemas; the protocol carries the envelope.
 

@@ -244,7 +244,7 @@ A composite session completes when:
 
 1. Execution reaches a node with `terminal: true`, OR
 2. A node explicitly emits an `end` handoff to a synthetic terminal, OR
-3. The session times out (normal AEP TTL behaviour)
+3. The session times out (normal AEP TTL behavior)
 
 Termination condition (3) produces a `graph_invalid` finding if no terminal was reachable — this usually indicates a broken graph definition.
 

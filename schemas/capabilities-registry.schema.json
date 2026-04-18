@@ -24,6 +24,16 @@
       "minItems": 1,
       "description": "I/O modalities supported. Text is the baseline; any agent supporting evaluation MUST support text."
     },
+    "extensions": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse"]},
+          {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
+        ]
+      },
+      "description": "Optional AEP extensions this agent supports. Standard values use the registered extension IDs; vendor-specific values MUST use reverse-DNS prefixes."
+    },
     "languages": {
       "type": "array",
       "items": {"type": "string", "description": "BCP 47 language tag."},

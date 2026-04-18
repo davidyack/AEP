@@ -34,7 +34,7 @@ Working document. Priorities reflect current understanding; order is a signal, n
 - **Composite Session Evaluation (CSE) extension.** The v0.1 core includes the hooks (graph in sessions, nodeId on trace turns, compositeCapable on contracts, agentId-or-graph on session start). The extension spec itself — graph schema, handoff semantics, node/edge/path/graph evaluation targets, CSE-specific scoring dimensions — is a companion specification pending in v0.2.
 - **Cross-agent-version replay semantics.** Replay a v1 trace against v2 and surface divergence. Open questions about seed compatibility and context migration.
 - **Conformance test suite.** A formal suite that certifies an implementation. Comes after the reference implementation, because the suite needs something to test against.
-- **Non-determinism budgeting.** A configurable tolerance for behavioural-equivalence claims under replay, for stochastic agents.
+- **Non-determinism budgeting.** A configurable tolerance for behavioral-equivalence claims under replay, for stochastic agents.
 
 ## v1.0 (not before the evidence justifies it)
 

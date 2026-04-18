@@ -44,7 +44,7 @@
     "lastReviewedAt": {
       "type": "string",
       "format": "date-time",
-      "description": "When the bundle was last validated against the agent's actual behaviour. Drift risk is real; see Surface Parity Check."
+      "description": "When the bundle was last validated against the agent's actual behavior. Drift risk is real; see Surface Parity Check."
     }
   },
   "additionalProperties": false

@@ -43,7 +43,7 @@
     "tags": {
       "type": "array",
       "items": {"type": "string"},
-      "description": "Freeform tags for filtering and discovery (e.g. 'safety', 'summarisation', 'english')."
+      "description": "Freeform tags for filtering and discovery (e.g. 'safety', 'summarization', 'english')."
     },
     "license": {
       "type": "string",

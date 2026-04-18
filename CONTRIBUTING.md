@@ -2,7 +2,7 @@
 
 Thank you for considering a contribution. AEP is a small project with an explicit point of view, and your contribution is more likely to land quickly if you read this first.
 
-## What we're optimising for
+## What we're optimizing for
 
 **Evidence over opinion.** If you have an implementation that hit a limitation in the spec, that matters more than a thought about what might matter. "We tried to do X and the schema wouldn't let us" is a strong contribution. "The schema should probably support X" is a weaker one.
 
@@ -42,7 +42,7 @@ Substantive changes (new methods, new schema fields, changes to existing semanti
 
 - Markdown files use ATX-style headings (`#`, `##`) and reference-style links where links would clutter prose.
 - JSON schemas are Draft 2020-12.
-- Keep prose in British or American English — pick one per document and be consistent.
+- Keep prose in American English.
 - Avoid marketing language. This is a spec, not a pitch.
 
 ## Review

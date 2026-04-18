@@ -2,7 +2,7 @@
   "id": "example.inquiry-quality-v1",
   "name": "Inquiry Assistant Quality Suite",
   "version": "1.0.0",
-  "description": "Quality evaluation dataset covering the Inquiry Assistant's core behaviour — asking clarifying questions rather than jumping to solutions when user requests are vague.",
+  "description": "Quality evaluation dataset covering the Inquiry Assistant's core behavior — asking clarifying questions rather than jumping to solutions when user requests are vague.",
   "agentId": "example.inquiry-assistant",
   "evaluator": "inquiry_quality",
   "sourceRef": "internal:aep-reference/inquiry-quality-v1",

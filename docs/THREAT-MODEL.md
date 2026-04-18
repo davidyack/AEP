@@ -38,7 +38,7 @@ Out of scope:
                               └───────────────┘
 ```
 
-The evaluator is trusted to the server (authenticated, authorised). The server is trusted to the agent (same organisation, same deployment). The agent is not trusted to the tool backends beyond what its tool allow-list permits. Scenario artifacts, however, can originate from anywhere — shared corpora, third-party red-team libraries, user-submitted test cases — and must be treated as untrusted input even when submitted by a trusted evaluator.
+The evaluator is trusted to the server (authenticated, authorized). The server is trusted to the agent (same organisation, same deployment). The agent is not trusted to the tool backends beyond what its tool allow-list permits. Scenario artifacts, however, can originate from anywhere — shared corpora, third-party red-team libraries, user-submitted test cases — and must be treated as untrusted input even when submitted by a trusted evaluator.
 
 This last point is often missed and is the source of several protocol-level threats.
 
@@ -50,17 +50,17 @@ This last point is often missed and is the source of several protocol-level thre
 
 **Conditions.** Attacker can submit scenarios and can read traces. This is typical in shared eval environments.
 
-**Mitigation.** Scenarios MUST be validated against a policy before execution. Traces inherit the sensitivity of their inputs and MUST be access-controlled accordingly. Evaluators SHOULD run untrusted scenarios only against agents with no access to data the scenario author isn't authorised to see.
+**Mitigation.** Scenarios MUST be validated against a policy before execution. Traces inherit the sensitivity of their inputs and MUST be access-controlled accordingly. Evaluators SHOULD run untrusted scenarios only against agents with no access to data the scenario author isn't authorized to see.
 
 **Residual risk.** Validation catches structural attacks, not semantic ones. A scenario that looks innocuous but extracts information through subtle probing may pass validation. Access control on traces is the stronger mitigation.
 
 ### T2. Server lies about ContextBundle
 
-**Scenario.** The AEP server returns a ContextBundle that does not match what the underlying agent actually does. Evaluators produce findings against a false picture, and the real agent's behaviour goes unexamined.
+**Scenario.** The AEP server returns a ContextBundle that does not match what the underlying agent actually does. Evaluators produce findings against a false picture, and the real agent's behavior goes unexamined.
 
 **Conditions.** Server is compromised, or ContextBundle has drifted from reality.
 
-**Mitigation.** The *Surface Parity Check* pattern addresses this: run representative scenarios against both the user surface and the evaluation surface, and assert behavioural equivalence. Bundles SHOULD include `lastReviewedAt` timestamps; stale bundles trigger review.
+**Mitigation.** The *Surface Parity Check* pattern addresses this: run representative scenarios against both the user surface and the evaluation surface, and assert behavioral equivalence. Bundles SHOULD include `lastReviewedAt` timestamps; stale bundles trigger review.
 
 **Residual risk.** A sophisticated adversary controlling the server could fake parity checks too. At that point, the trust boundary has already been crossed and protocol-level mitigations are insufficient.
 
@@ -70,13 +70,13 @@ This last point is often missed and is the source of several protocol-level thre
 
 **Conditions.** Trace storage and replay access controls are misaligned.
 
-**Mitigation.** Traces MUST carry their originating mode. Replay access controls MUST honour the mode: a client authorised for blackbox only MUST NOT be able to replay a toolbox trace. The protocol makes this the server's responsibility; servers MUST reject replay requests where the caller's mode authorisation is below the trace's captured mode.
+**Mitigation.** Traces MUST carry their originating mode. Replay access controls MUST honor the mode: a client authorized for blackbox only MUST NOT be able to replay a toolbox trace. The protocol makes this the server's responsibility; servers MUST reject replay requests where the caller's mode authorization is below the trace's captured mode.
 
 **Residual risk.** Trace export to external systems loses this protection. The protocol cannot enforce access control on data that has left its boundary.
 
 ### T4. Scenario confuses an agent in production
 
-**Scenario.** A scenario crafted for evaluation finds its way into production traffic (via logs, via scenario-sharing, via accidental submission), and triggers behaviour the agent would not normally exhibit.
+**Scenario.** A scenario crafted for evaluation finds its way into production traffic (via logs, via scenario-sharing, via accidental submission), and triggers behavior the agent would not normally exhibit.
 
 **Conditions.** Evaluation and production surfaces share underlying infrastructure, and scenario-scale inputs can reach the production surface.
 
@@ -98,11 +98,11 @@ This last point is often missed and is the source of several protocol-level thre
 
 **Scenario.** A finding's `evidenceRefs` point to artifacts the finding consumer shouldn't be able to read, but dereferencing the pointer bypasses access control.
 
-**Conditions.** Evidence pointers are treated as opaque capabilities instead of references requiring their own authorisation.
+**Conditions.** Evidence pointers are treated as opaque capabilities instead of references requiring their own authorization.
 
-**Mitigation.** Dereferencing an evidence pointer MUST require the caller to have independent authorisation for the referenced artifact. Pointers are not capabilities; they are hints.
+**Mitigation.** Dereferencing an evidence pointer MUST require the caller to have independent authorization for the referenced artifact. Pointers are not capabilities; they are hints.
 
-**Residual risk.** Misconfigured implementations that trust pointers. The protocol states the requirement; implementations must honour it.
+**Residual risk.** Misconfigured implementations that trust pointers. The protocol states the requirement; implementations must honor it.
 
 ### T7. Compounding cost attack via adaptive scenarios
 
@@ -130,7 +130,7 @@ This last point is often missed and is the source of several protocol-level thre
 |--------|--------------------|--------------------------|
 | T1 Malicious scenario exfiltrates | Scenario validation + trace ACLs | Evidence Pointer pattern |
 | T2 Server lies about bundle | Surface Parity Check | `lastReviewedAt`, parity scenario |
-| T3 Replay with stale privileges | Mode-aware replay authorisation | Six-mode taxonomy |
+| T3 Replay with stale privileges | Mode-aware replay authorization | Six-mode taxonomy |
 | T4 Scenario hits production | Separate surfaces | Second Door pattern |
 | T5 Sandbox overstated | Honest fidelity declaration | `ToolCapability.sandbox.fidelity` |
 | T6 Evidence ref exfiltration | Pointer ≠ capability | Evidence Pointer pattern |

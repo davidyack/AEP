@@ -8,7 +8,7 @@ This directory shows how a representative product-embedded agent would describe 
 |------|--------------|
 | [`agent-contract.json`](./agent-contract.json) | The full Agent Contract — inputs, outputs, context model, capabilities, determinism, endpoints, limits, traceability. This is what an AEP-compliant agent MUST publish. |
 | [`agent-descriptor.json`](./agent-descriptor.json) | Identity, risk tier, lifecycle, owner (a subcomponent of the Agent Contract shown standalone) |
-| [`context-bundle.json`](./context-bundle.json) | Intended use, non-goals, behavioural boundaries, tool capability descriptors |
+| [`context-bundle.json`](./context-bundle.json) | Intended use, non-goals, behavioral boundaries, tool capability descriptors |
 | [`scenarios/quality-probes-assumptions.json`](./scenarios/quality-probes-assumptions.json) | A linear quality scenario with multiple assertion types |
 | [`scenarios/safety-refuses-adversarial.json`](./scenarios/safety-refuses-adversarial.json) | A branching safety scenario with conditional next-turn selection |
 | [`datasets/inquiry-quality.json`](./datasets/inquiry-quality.json) | A dataset demonstrating the Dataset extension (§11.6) — five examples with mixed `expected`/`references` shapes |

@@ -24,9 +24,9 @@ This document names six modes. They are not exhaustive and they are not orthogon
 
 ## 2. Graybox
 
-**What's visible:** blackbox plus the Context Bundle — intended use, non-goals, behavioural boundaries, tool inventory, policy summary.
+**What's visible:** blackbox plus the Context Bundle — intended use, non-goals, behavioral boundaries, tool inventory, policy summary.
 
-**Good for:** the default mode for most quality and behaviour testing. Evaluators have enough context to judge whether an output is appropriate, not just whether it's correct.
+**Good for:** the default mode for most quality and behavior testing. Evaluators have enough context to judge whether an output is appropriate, not just whether it's correct.
 
 **Limitations:** no visibility into internal events. Policy violations that don't surface to the user are invisible.
 
@@ -42,7 +42,7 @@ This document names six modes. They are not exhaustive and they are not orthogon
 
 **Limitations:** still doesn't expose tool-call details or intermediate reasoning. Policy events that silently pass leave no trace.
 
-**Typical question:** "Did the agent's behaviour honour the policies it's supposed to be bound by?"
+**Typical question:** "Did the agent's behavior honor the policies it's supposed to be bound by?"
 
 ---
 
@@ -60,7 +60,7 @@ This document names six modes. They are not exhaustive and they are not orthogon
 
 ## 5. Sandboxed-Live
 
-**What's visible:** toolbox, but with real tool integrations that operate in a safe environment (test databases, mock external APIs with realistic behaviour, rate-limited real calls where appropriate).
+**What's visible:** toolbox, but with real tool integrations that operate in a safe environment (test databases, mock external APIs with realistic behavior, rate-limited real calls where appropriate).
 
 **Good for:** end-to-end testing with production-like fidelity. The agent exercises its real tool integrations without real-world consequences.
 
@@ -72,7 +72,7 @@ This document names six modes. They are not exhaustive and they are not orthogon
 
 ## 6. Replay
 
-**What's visible:** whatever was captured in a prior trace. The agent is not executed; its recorded behaviour is re-examined.
+**What's visible:** whatever was captured in a prior trace. The agent is not executed; its recorded behavior is re-examined.
 
 **Good for:** post-hoc analysis, bisection across agent versions, re-scoring against new rubrics, cheap regression checks.
 

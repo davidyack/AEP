@@ -148,6 +148,7 @@
       }
     ],
     "modalities": ["text"],
+    "extensions": ["policy-profile", "deterministic-replay"],
     "languages": ["en"],
     "outOfScope": [
       "legal-drafting",

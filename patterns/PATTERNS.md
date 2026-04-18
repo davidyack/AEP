@@ -18,7 +18,7 @@ Each pattern follows a compact form: **Context**, **Problem**, **Forces**, **Pat
 
 **Forces.**
 - The product surface is designed for humans, not test harnesses.
-- The agent's behaviour depends on product context (workspace, prior messages, persona).
+- The agent's behavior depends on product context (workspace, prior messages, persona).
 - Exposing the agent raw bypasses the context and produces misleading results.
 - Hardening a test endpoint is real engineering work.
 
@@ -40,7 +40,7 @@ Each pattern follows a compact form: **Context**, **Problem**, **Forces**, **Pat
 - Policy documents exist elsewhere and get stale.
 - Evaluators without intent context produce findings that are noise to the agent team.
 
-**Pattern.** Curate a **Context Bundle** that travels with the agent: user-facing purpose, example tasks, known constraints, behavioural boundaries, policy summary, and a tool summary. Make it a first-class artifact, not an afterthought. Require it as a precondition for evaluation.
+**Pattern.** Curate a **Context Bundle** that travels with the agent: user-facing purpose, example tasks, known constraints, behavioral boundaries, policy summary, and a tool summary. Make it a first-class artifact, not an afterthought. Require it as a precondition for evaluation.
 
 **Consequences.** Evaluators arrive oriented. Agent teams are forced to articulate intent. Findings become precise because they reference explicit boundaries. The cost is authoring and maintenance — a Context Bundle that drifts from reality is worse than none.
 
@@ -80,7 +80,7 @@ See [`TEST-MODES.md`](./TEST-MODES.md) for the six modes we've found useful.
 - The same observation can be safety-relevant, quality-relevant, or both.
 - Evidence matters: a finding without a traceable artifact is a rumour.
 
-**Pattern.** Produce **Findings**, not pass/fail. A Finding has a category (safety / quality / security / performance), a severity, an observed behaviour, an expected behaviour, and typed references to the evidence. Aggregate boolean metrics are derived from Findings, not the other way around.
+**Pattern.** Produce **Findings**, not pass/fail. A Finding has a category (safety / quality / security / performance), a severity, an observed behavior, an expected behavior, and typed references to the evidence. Aggregate boolean metrics are derived from Findings, not the other way around.
 
 **Consequences.** Triage becomes meaningful. Regression detection keys off severity, not presence. The cost is that every evaluation must produce structured output, and teams used to green-bar thinking must adjust.
 
@@ -98,7 +98,7 @@ See [`TEST-MODES.md`](./TEST-MODES.md) for the six modes we've found useful.
 - Adversarial scenarios need to adapt to agent responses.
 - Deterministic scenarios need to be distinguishable from model-in-the-loop ones.
 
-**Pattern.** Treat scenarios as **executable artifacts** with a formal structure: identity, category, persona, a state machine of turns, expected behaviours, failure conditions, and a scoring rubric. Linear message lists are a degenerate case.
+**Pattern.** Treat scenarios as **executable artifacts** with a formal structure: identity, category, persona, a state machine of turns, expected behaviors, failure conditions, and a scoring rubric. Linear message lists are a degenerate case.
 
 **Consequences.** Scenarios can be versioned, diffed, and replayed. A failing scenario produces a reproducible trace, not a story. The cost is authoring effort — scenarios become software, and software requires maintenance.
 
@@ -188,7 +188,7 @@ See [`TEST-MODES.md`](./TEST-MODES.md) for the six modes we've found useful.
 - Parity checks are themselves tests that need maintenance.
 - The cost of drift is delayed until a production incident.
 
-**Pattern.** Include a **parity check** in the test suite: a small scenario that runs through both the user surface (headless browser, API-level) and the evaluation surface, and asserts behavioural equivalence. Run it in CI.
+**Pattern.** Include a **parity check** in the test suite: a small scenario that runs through both the user surface (headless browser, API-level) and the evaluation surface, and asserts behavioral equivalence. Run it in CI.
 
 **Consequences.** Drift is caught early. The cost is explicit: you pay for parity in test time and maintenance, but you pay once, not per-bug.
 
@@ -226,7 +226,7 @@ See [`TEST-MODES.md`](./TEST-MODES.md) for the six modes we've found useful.
 - Coverage-by-domain and coverage-by-action are different questions and both matter.
 - Free-text scope descriptions don't support automation.
 
-**Pattern.** Make the agent publish a **capability registry** — a machine-readable declaration of domains (finance, healthcare, customer-service), actions (summarise, draft, refuse), and modalities (text, voice, image) the agent supports. Also declare `outOfScope` — the domains and actions the agent MUST refuse. Evaluators use the registry to scope their suites and detect coverage gaps.
+**Pattern.** Make the agent publish a **capability registry** — a machine-readable declaration of domains (finance, healthcare, customer-service), actions (summarize, draft, refuse), and modalities (text, voice, image) the agent supports. Also declare `outOfScope` — the domains and actions the agent MUST refuse. Evaluators use the registry to scope their suites and detect coverage gaps.
 
 **Consequences.** Evaluators know where to test and where not to. Findings from out-of-scope probes are filtered at submission. The cost is that agent teams must commit to a scope in machine-readable form, which is harder than waving at a PRD.
 

@@ -2,22 +2,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aep.dev/schemas/evaluation-result.schema.json",
   "title": "EvaluationResult",
-  "description": "The canonical output of an AEP evaluation session. Every completed session MUST produce exactly one EvaluationResult with this shape. Scoring is expressed across named dimensions; findings referencing specific violations are carried separately and referenced from here.",
+  "description": "The canonical output of an AEP evaluation session. Result references may be polled while scoring is pending; once scoring completes, every completed session MUST produce exactly one ready EvaluationResult with this shape. Scoring is expressed across named dimensions; findings referencing specific violations are carried separately and referenced from here.",
   "type": "object",
   "required": [
     "resultId",
     "sessionId",
-    "agentId",
-    "agentVersion",
-    "testMode",
-    "scores",
-    "violations",
-    "outcome",
-    "producedAt"
+    "status"
   ],
   "properties": {
     "resultId": {"type": "string"},
     "sessionId": {"type": "string"},
+    "status": {
+      "enum": ["pending", "ready"],
+      "description": "Polling status for the result artifact. pending = scoring still in progress. ready = terminal EvaluationResult content is available."
+    },
     "agentId": {"type": "string"},
     "agentVersion": {"type": "string"},
     "testMode": {
@@ -35,6 +33,10 @@
     "outcome": {
       "$ref": "#/$defs/Outcome",
       "description": "Top-level pass/fail/partial judgement derived from scores and violations."
+    },
+    "error": {
+      "$ref": "#/$defs/ResultError",
+      "description": "Present when scoring completed with outcome.status = error."
     },
     "metrics": {
       "$ref": "#/$defs/Metrics",
@@ -73,14 +75,14 @@
         },
         "safety": {
           "$ref": "#/$defs/DimensionScore",
-          "description": "How well the agent honoured safety, policy, and RAI constraints. REQUIRED."
+          "description": "How well the agent honored safety, policy, and RAI constraints. REQUIRED."
         },
         "grounding": {
           "$ref": "#/$defs/DimensionScore",
           "description": "How well the agent's outputs were supported by retrieved context or stated evidence. REQUIRED when the agent declares retrieval injection points."
         },
         "instructionFollowing": {"$ref": "#/$defs/DimensionScore"},
-        "robustness": {"$ref": "#/$defs/DimensionScore", "description": "Behaviour under adversarial or noisy inputs."},
+        "robustness": {"$ref": "#/$defs/DimensionScore", "description": "Behavior under adversarial or noisy inputs."},
         "coherence": {"$ref": "#/$defs/DimensionScore"},
         "efficiency": {"$ref": "#/$defs/DimensionScore", "description": "Latency/cost relative to task difficulty."},
         "toolUse": {"$ref": "#/$defs/DimensionScore", "description": "Correctness of tool selection and invocation. REQUIRED for agents declaring tool-use modality."}
@@ -173,7 +175,28 @@
         "traceCompleteness": {"enum": ["partial", "complete"]},
         "knownNondeterminism": {"type": "array", "items": {"type": "string"}}
       }
+    },
+    "ResultError": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {"type": "integer"},
+        "message": {"type": "string"},
+        "data": {"type": "object", "additionalProperties": true}
+      }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "ready"}
+        }
+      },
+      "then": {
+        "required": ["agentId", "agentVersion", "testMode", "scores", "violations", "outcome", "producedAt"]
+      }
+    }
+  ],
   "additionalProperties": false
 }

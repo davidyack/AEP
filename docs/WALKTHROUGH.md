@@ -24,7 +24,7 @@ export AEP_TOKEN="eyJhbGciOi..."   # short-lived, ≤1 hour
 
 ## Step 1 — Discover available agents
 
-You want to see what agents this server exposes and which ones you're authorised to test.
+You want to see what agents this server exposes and which ones you're authorized to test.
 
 **REST**
 
@@ -72,7 +72,7 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
 }
 ```
 
-Note `authorizedModes` vs `supportedModes`: this agent supports `toolbox` but your credentials don't cover that mode, so you'll see it in the list but cannot create toolbox sessions against it. Unauthorised agents are omitted entirely rather than shown here.
+Note `authorizedModes` vs `supportedModes`: this agent supports `toolbox` but your credentials don't cover that mode, so you'll see it in the list but cannot create toolbox sessions against it. Unauthorized agents are omitted entirely rather than shown here.
 
 ### Filtering and pagination
 
@@ -199,7 +199,7 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
 }
 ```
 
-The session is now `active`. You can run turns or scenarios.
+The session is now `active`. Internally, the server created the session record, recorded the initial `created` state, and completed the `created -> active` transition before returning success. You can now run turns or scenarios.
 
 ---
 
@@ -319,30 +319,41 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
 {
   "resultId": "result_h8i9j0",
   "sessionId": "sess_a1b2c3d4",
+  "status": "ready",
   "agentId": "example.inquiry-assistant",
   "agentVersion": "1.2.0",
   "testMode": "graybox",
   "scores": {
-    "quality": 0.82,
-    "safety": 1.0,
-    "grounding": null
+    "quality": {
+      "value": 0.82,
+      "scale": {"min": 0, "max": 1, "interpretation": "higher-is-better"},
+      "method": "llm-judge"
+    },
+    "safety": {
+      "value": 1.0,
+      "scale": {"min": 0, "max": 1, "interpretation": "higher-is-better"},
+      "method": "deterministic"
+    }
   },
   "violations": [],
-  "outcome": "passed",
+  "outcome": {
+    "status": "passed",
+    "summary": "The agent clarified assumptions without violating safety constraints."
+  },
   "metrics": {
-    "turnsExecuted": 1,
-    "totalLatencyMs": 1340,
-    "findingsCount": 0
+    "turnCount": 1,
+    "wallClockMs": 1340,
+    "policyEventCount": 0
   },
   "scenarioResults": [
     {
       "scenarioId": "reference.quality.probes_assumptions",
-      "status": "completed",
-      "passed": true
+      "status": "passed"
     }
   ],
   "traceRef": "trace_k1l2m3",
   "findingsRef": "findings_n4o5p6",
+  "producedAt": "2026-04-17T12:00:03Z",
   "reproducibility": {
     "traceCompleteness": "complete",
     "replayable": true
@@ -483,7 +494,7 @@ Key properties to rely on:
 - **Fall-through guarantee** (AEP-REQ-070): if the stream connection fails permanently, the sealed Trace is still retrievable via `GET /aep/traces/{traceRef}` after the session completes.
 - **Heartbeats** arrive every ≤30 seconds so clients can detect dead connections.
 
-Streaming is an observability extension. It does not let the client abort or redirect a session; that's a v0.2 concern.
+Streaming is an observability extension. It does not add stream-native control semantics such as early-abort based on streamed observations or mid-stream redirection; those are v0.2 concerns. If you need to terminate a session, use the standard abort lifecycle method.
 
 ## What this walkthrough doesn't cover
 

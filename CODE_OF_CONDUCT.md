@@ -6,14 +6,14 @@ We pledge to make participation in this project a harassment-free experience for
 
 ## Our standards
 
-Examples of behaviour that contributes to a positive environment:
+Examples of behavior that contributes to a positive environment:
 - Using welcoming and inclusive language
 - Being respectful of differing viewpoints and experiences
 - Gracefully accepting constructive criticism
 - Focusing on what is best for the community
 - Showing empathy towards other community members
 
-Examples of unacceptable behaviour:
+Examples of unacceptable behavior:
 - The use of sexualised language or imagery and unwelcome sexual attention or advances
 - Trolling, insulting or derogatory comments, and personal or political attacks
 - Public or private harassment
@@ -26,7 +26,7 @@ This Code of Conduct applies within all project spaces, and also applies when an
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behaviour may be reported by contacting the project maintainers. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project maintainers. All complaints will be reviewed and investigated promptly and fairly.
 
 Maintainers are obligated to respect the privacy and security of the reporter of any incident.
 

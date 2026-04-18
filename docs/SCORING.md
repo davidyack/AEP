@@ -44,13 +44,13 @@ There are at least five distinct scoring concerns. They interact but they do not
 
 ## 4. Regression against baseline
 
-**What it is.** Comparing current behaviour against a prior known-good state. Did anything get worse? What specifically?
+**What it is.** Comparing current behavior against a prior known-good state. Did anything get worse? What specifically?
 
-**What it's good for.** Release gates, post-deployment monitoring, bisecting which change broke which behaviour.
+**What it's good for.** Release gates, post-deployment monitoring, bisecting which change broke which behavior.
 
-**What it isn't good for.** Validating that the baseline itself was good. You can have a stable regression of mediocre behaviour.
+**What it isn't good for.** Validating that the baseline itself was good. You can have a stable regression of mediocre behavior.
 
-**What makes it hard.** Choosing a baseline (which version? which date? which configuration?), deciding what "worse" means (fewer passes? more severe findings? both weighted how?), and handling the cases where the baseline's behaviour itself was wrong.
+**What makes it hard.** Choosing a baseline (which version? which date? which configuration?), deciding what "worse" means (fewer passes? more severe findings? both weighted how?), and handling the cases where the baseline's behavior itself was wrong.
 
 **How AEP accommodates it.** Traces are immutable and version-attributed (`agentVersion`), which is the minimum needed to make regression possible. The `replay` mode allows old traces to be re-examined under new rubrics. Baseline management and comparison semantics are implementation concerns.
 
@@ -62,7 +62,7 @@ There are at least five distinct scoring concerns. They interact but they do not
 
 **What it isn't good for.** Triage. An aggregate metric with no drill-down is useless for fixing anything.
 
-**What makes it hard.** Weighting (does a critical finding count as 1 or 100 findings?), normalisation (are percentages over runs, over scenarios, or over turns?), and survivor bias (aggregates over only the scenarios you chose to run).
+**What makes it hard.** Weighting (does a critical finding count as 1 or 100 findings?), normalization (are percentages over runs, over scenarios, or over turns?), and survivor bias (aggregates over only the scenarios you chose to run).
 
 **How AEP accommodates it.** Aggregation is derived from findings; the Finding schema supports the fields needed (severity, category, agent version, scenario identity). The protocol does not prescribe aggregation methods.
 

@@ -54,7 +54,7 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-020 | Session state isolation | §6.4 |
 | AEP-REQ-021 | Implement both REST and JSON-RPC | §7 |
 | AEP-REQ-022 | REST and JSON-RPC return equivalent data | §7 |
-| AEP-REQ-023 | Discovery returns summaries, not full contracts; omits unauthorised agents | §7.1 |
+| AEP-REQ-023 | Discovery returns summaries, not full contracts; omits unauthorized agents | §7.1 |
 | AEP-REQ-029 | Turns idempotent with idempotencyKey | §7.3 |
 | AEP-REQ-030 | Expose aep.initialize for capability negotiation | §7.6 |
 | AEP-REQ-031 | Require authentication on all endpoints | §7.7 |
@@ -64,7 +64,7 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-025 | Discovery supports filter query parameters; rejects unknown ones | §7.1 |
 | AEP-REQ-026 | Discovery summaries include authorizedModes for caller | §7.1 |
 | AEP-REQ-027 | Discovery supports updatedSince for incremental sync; summaries carry lastUpdatedAt | §7.1 |
-| AEP-REQ-028 | Unauthorised GET /agents/{id} returns -32001, not -32010 | §7.1 |
+| AEP-REQ-028 | Unauthorized GET /agents/{id} returns -32001, not -32010 | §7.1 |
 | AEP-REQ-035 | Supply injectedContext at session start | §8 |
 | AEP-REQ-036 | Validate injected context; -32040 on mismatch | §8 |
 | AEP-REQ-037 | Include injectedContext in Trace | §8 |
@@ -74,7 +74,7 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-043 | Produce Trace for every session | §10 |
 | AEP-REQ-044 | Seal traces at session end; -32006 on mutation | §10 |
 | AEP-REQ-045 | Traces carry minimum required fields | §10 |
-| AEP-REQ-046 | Mode-aware replay authorisation | §10 |
+| AEP-REQ-046 | Mode-aware replay authorization | §10 |
 | AEP-REQ-047 | Retain sealed traces ≥7 days | §10 |
 | AEP-REQ-059 | Support trace-faithful replay (required baseline) | §11.4 |
 | AEP-REQ-062 | Deterministic replay blocks live tool calls; -32050 | §11.4 |
@@ -84,9 +84,9 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-081 | Never leak internal details in errors | §12 |
 | AEP-REQ-085 | Record errors in Trace | §12.3 |
 | AEP-REQ-086 | No public production exposure | §13.1 |
-| AEP-REQ-088 | Per-agent, per-mode authorisation independent | §13.2 |
+| AEP-REQ-088 | Per-agent, per-mode authorization independent | §13.2 |
 | AEP-REQ-089 | Preserve tenant boundaries on artifact retrieval | §13.2 |
-| AEP-REQ-090 | Log authorisation decisions | §13.2 |
+| AEP-REQ-090 | Log authorization decisions | §13.2 |
 | AEP-REQ-091 | Enforce rate limits per evaluator and per agent | §13.3 |
 | AEP-REQ-092 | Rate-limited requests return -32020 | §13.3 |
 | AEP-REQ-094 | Validate scenarios against schema | §13.4 |
@@ -161,7 +161,7 @@ Only required for implementations claiming the extension.
 | AEP-REQ-064 | Advertise streaming in capabilities.extensions; implement SSE endpoint |
 | AEP-REQ-065 | Emit only registered event types; vendor events use reverse-DNS prefixes |
 | AEP-REQ-066 | Heartbeat ≥every 30s with sequence id |
-| AEP-REQ-067 | Honour Last-Event-ID for resume; 409 if outside retention window |
+| AEP-REQ-067 | Honor Last-Event-ID for resume; 409 if outside retention window |
 | AEP-REQ-068 | Retain replay buffer of ≥1000 events or 5 minutes per active session |
 | AEP-REQ-069 | Streamed events applied in id order equal sealed Trace content |
 | AEP-REQ-070 | Sealed Trace always retrievable via polling even if stream fails |
@@ -180,7 +180,7 @@ Only required for implementations claiming the extension.
 
 ### Composite Session Evaluation hooks (§11.7)
 
-These are the core hooks that enable the CSE extension. The full extension is defined in a companion specification; v0.1 core requires only that these hooks be honoured.
+These are the core hooks that enable the CSE extension. The full extension is defined in a companion specification; v0.1 core requires only that these hooks be honored.
 
 | ID | Summary |
 |----|---------|

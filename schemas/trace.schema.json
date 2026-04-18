@@ -9,7 +9,9 @@
     "sessionId",
     "aepVersion",
     "testMode",
+    "injectedContext",
     "turns",
+    "finalOutcome",
     "sealed",
     "startedAt"
   ],
@@ -27,7 +29,7 @@
     },
     "testMode": {
       "enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"],
-      "description": "Mode in which this trace was captured. Replay access MUST honour this mode — a trace captured in 'toolbox' MUST NOT be replayed by a caller authorised only for 'blackbox'."
+      "description": "Mode in which this trace was captured. Replay access MUST honor this mode — a trace captured in 'toolbox' MUST NOT be replayed by a caller authorized only for 'blackbox'."
     },
     "sealed": {
       "type": "boolean",
@@ -48,6 +50,10 @@
       "type": "array",
       "items": {"$ref": "#/$defs/TraceTurn"}
     },
+    "finalOutcome": {
+      "$ref": "#/$defs/FinalOutcome",
+      "description": "Canonical completion record for the session. Required even for failed and aborted sessions."
+    },
     "decisionPath": {
       "type": "array",
       "items": {"$ref": "#/$defs/DecisionNode"},
@@ -64,7 +70,7 @@
   "$defs": {
     "TraceTurn": {
       "type": "object",
-      "required": ["turnIndex", "input", "output", "startedAt", "completedAt"],
+      "required": ["turnIndex", "input", "output", "inputDigest", "outputDigest", "startedAt", "completedAt"],
       "properties": {
         "turnIndex": {"type": "integer", "minimum": 0},
         "turnId": {"type": "string"},
@@ -74,7 +80,7 @@
         },
         "input": {"description": "Input as submitted. May be object or string depending on agent inputSchema."},
         "output": {"description": "Output as returned. May be object or string depending on agent outputSchema."},
-        "inputDigest": {"type": "string", "description": "Hash of normalised input. Required for replay verification."},
+        "inputDigest": {"type": "string", "description": "Hash of normalized input. Required for replay verification."},
         "outputDigest": {"type": "string"},
         "startedAt": {"type": "string", "format": "date-time"},
         "completedAt": {"type": "string", "format": "date-time"},
@@ -100,6 +106,17 @@
           "type": "object",
           "description": "Captured agent state after this turn. Required for deterministic replay of multi-turn sessions."
         }
+      }
+    },
+    "FinalOutcome": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": ["completed", "failed", "timed_out", "aborted"]
+        },
+        "summary": {"type": "string"},
+        "errorRef": {"type": "string", "description": "Optional pointer to a trace error record explaining the terminal failure."}
       }
     },
     "ReasoningStep": {

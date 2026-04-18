@@ -31,7 +31,7 @@ Required core (every compliant implementation):
 - **Execution model** specifying when scenarios complete and how scoring fires
 - **Trace production** for every session, sealed and replayable
 - **19 standardised error codes** with retry semantics
-- **Enforced security model**: auth, authorisation, rate limits, isolation
+- **Enforced security model**: auth, authorization, rate limits, isolation
 - **Conformance declaration** at `/.well-known/aep-compliance.json`
 
 Optional extensions (implement if you need them):

@@ -34,7 +34,7 @@ This extension defines a canonical shape so datasets port cleanly between AEP-co
   "id": "example.inquiry-quality-v1",
   "name": "Inquiry Assistant Quality Suite",
   "version": "1.0.0",
-  "description": "Quality evaluation covering assumption-probing behaviours.",
+  "description": "Quality evaluation covering assumption-probing behaviors.",
   "agentId": "example.inquiry-assistant",
   "evaluator": "inquiry_quality",
   "policyProfileRef": "policy:example.default@2026-04-01",

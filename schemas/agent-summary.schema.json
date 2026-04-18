@@ -67,11 +67,16 @@
     "authorizedModes": {
       "type": "array",
       "items": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
-      "description": "Subset of supportedModes the CALLING IDENTITY is authorised to use. May be smaller than supportedModes based on caller's permissions."
+      "description": "Subset of supportedModes the CALLING IDENTITY is authorized to use. May be smaller than supportedModes based on caller's permissions."
     },
     "supportedExtensions": {
       "type": "array",
-      "items": {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay"]},
+      "items": {
+        "oneOf": [
+          {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse"]},
+          {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
+        ]
+      },
       "description": "Optional extensions this agent declares support for."
     },
     "owner": {

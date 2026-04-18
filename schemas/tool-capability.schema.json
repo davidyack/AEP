@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aep.dev/schemas/tool-capability.schema.json",
   "title": "ToolCapability",
-  "description": "Structured description of a tool's behaviour. Replaces the v0 single-enum sideEffectLevel with the four attributes that actually matter for evaluation: reversibility, observability, blast radius, and sandbox availability.",
+  "description": "Structured description of a tool's behavior. Replaces the v0 single-enum sideEffectLevel with the four attributes that actually matter for evaluation: reversibility, observability, blast radius, and sandbox availability.",
   "type": "object",
   "required": ["toolName", "reversibility", "observability", "blastRadius"],
   "properties": {

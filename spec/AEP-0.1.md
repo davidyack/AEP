@@ -12,7 +12,7 @@ The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **
 
 Every MUST-level requirement carries an identifier of the form `AEP-REQ-NNN`. These identifiers are stable across minor versions and are the canonical handles for a future conformance test suite to reference.
 
-A compliant implementation of AEP is one that honours every requirement addressed to its role (Agent, Server, Evaluator). §15 lists requirements by role.
+A compliant implementation of AEP is one that honors every requirement addressed to its role (Agent, Server, Evaluator). §15 lists requirements by role.
 
 ## 2. Scope
 
@@ -42,7 +42,7 @@ A compliant implementation of AEP is one that honours every requirement addresse
 
 ## 3. Relationship to MCP
 
-**AEP defines evaluation of decision-making systems. MCP defines invocation of capabilities. AEP MUST NOT be used to expose arbitrary tools, and MCP MUST NOT be used to evaluate agent behaviour.** These are the hard architectural lines.
+**AEP defines evaluation of decision-making systems. MCP defines invocation of capabilities. AEP MUST NOT be used to expose arbitrary tools, and MCP MUST NOT be used to evaluate agent behavior.** These are the hard architectural lines.
 
 The two protocols solve different problems:
 
@@ -64,7 +64,7 @@ The temptation for implementers is to say "couldn't I just expose my agent as a 
 
 ## 4. Required Core vs Optional Extensions
 
-The protocol has a **required core** — what every compliant implementation MUST support — and **optional extensions** — capabilities implementations MAY support but are not required to. This split keeps the core small and fast to implement while allowing richer behaviour where it's warranted.
+The protocol has a **required core** — what every compliant implementation MUST support — and **optional extensions** — capabilities implementations MAY support but are not required to. This split keeps the core small and fast to implement while allowing richer behavior where it's warranted.
 
 ### 4.1 The Core Profile
 
@@ -82,7 +82,7 @@ An implementation satisfies the Core Profile when it provides:
 - **Context injection** discipline (§8)
 - **`blackbox` and `graybox` evaluation modes** (§9); others are opt-in
 - **Registered error codes** (§12)
-- **Required security model**: authentication, authorisation by mode, rate limits, isolation (§13)
+- **Required security model**: authentication, authorization by mode, rate limits, isolation (§13)
 - **Conformance declaration** at `/.well-known/aep-compliance.json` (§15)
 
 This is deliberately a smaller surface than the entire §4.2 list below. A Core-Profile-only server is a legitimate, useful AEP server — it can evaluate agents, produce Traces, accept findings, and interoperate with Core-Profile clients.
@@ -134,10 +134,12 @@ Every evaluation MUST occur within a session. Sessions follow a required five-st
 ```
   created ──start──▶ active ──evaluate──▶ evaluated ──report──▶ reported ──end──▶ closed
                        │
-                       └──▶ aborted  (on timeout, auth failure, explicit abort)
+                        └──▶ aborted  (on timeout, auth failure, explicit abort)
 ```
 
-**AEP-REQ-008**: Servers MUST implement the five states and enforce the transition rules in §6.2.
+`POST /aep/sessions` is the REST form of `aep.session.start`. A successful start call allocates the session, records the initial `created` state, performs the `created → active` transition, binds the agent version, initializes injected context, and then returns the active session summary. `created` is therefore a real lifecycle state even when it is transient in successful start responses.
+
+**AEP-REQ-008**: Servers MUST implement the five states and enforce the transition rules in §6.2. `POST /aep/sessions` / `aep.session.start` MUST create the session in `created` and complete the `created → active` transition before returning success.
 
 **AEP-REQ-009**: Servers MUST record every transition in the session's `lifecycle.transitions` array with timestamp. The array is append-only; once written, entries MUST NOT be modified.
 
@@ -149,11 +151,11 @@ Every evaluation MUST occur within a session. Sessions follow a required five-st
 
 | From | To | Method | Notes |
 |------|-----|--------|-------|
-| created | active | `aep.session.start` | Binds agent version; initialises injected context |
+| created | active | `aep.session.start` | Binds agent version; initializes injected context |
 | active | evaluated | `aep.session.evaluate` | Triggers scoring; see §6.3 |
 | evaluated | reported | `aep.session.report` | Seals the EvaluationResult |
 | reported | closed | `aep.session.end` | Releases resources |
-| any | aborted | — | Timeout, auth failure, or `aep.session.abort` |
+| any | aborted | `aep.session.abort` | Timeout, auth failure, or explicit abort |
 
 ### 6.3 Execution model
 
@@ -168,7 +170,7 @@ This section specifies when scenarios complete, when scoring runs, and what part
 
 **AEP-REQ-013**: Servers MUST record the completion cause in the Trace's `finalOutcome.status` field using one of: `completed`, `failed`, `timed_out`, `aborted`.
 
-**AEP-REQ-014**: `aep.session.evaluate` MUST NOT be accepted while any turn is in-flight. Servers MUST either reject with `-32030` or wait for in-flight turns to drain; servers MUST document which behaviour they implement.
+**AEP-REQ-014**: `aep.session.evaluate` MUST NOT be accepted while any turn is in-flight. Servers MUST either reject with `-32030` or wait for in-flight turns to drain; servers MUST document which behavior they implement.
 
 **AEP-REQ-015**: Scoring runs during the `active → evaluated` transition. The transition MUST NOT complete until scoring produces an EvaluationResult or fails explicitly.
 
@@ -176,7 +178,7 @@ This section specifies when scenarios complete, when scoring runs, and what part
 
 **AEP-REQ-017**: For asynchronous scoring, clients poll via `aep.result.get`. Servers MUST return `status: "pending"` while scoring is in progress and `status: "ready"` when complete.
 
-**AEP-REQ-018**: If scoring fails, the session MUST still transition to `evaluated`, but the EvaluationResult MUST have `outcome: "error"` with a populated `error` field. Clients MUST be able to retrieve the Trace even when the Result is in error.
+**AEP-REQ-018**: If scoring fails, the session MUST still transition to `evaluated`, but the EvaluationResult MUST have `outcome.status: "error"` with a populated top-level `error` field. Clients MUST be able to retrieve the Trace even when the Result is in error.
 
 ### 6.4 Multi-turn state
 
@@ -192,7 +194,7 @@ AEP sessions are stateful for performance: servers maintain live session state t
 
 **AEP-REQ-117**: No hidden server state may affect turn outputs without being represented in the Trace. Any input that influences an output — injected context, random seeds, model parameters, system prompts, retrieved documents — MUST appear in the Trace. Servers MUST NOT maintain influence-bearing state outside what the Trace captures.
 
-Together these mean: server state is an optimisation; the Trace is the specification of what happened. A reviewer asking "is this system replayable?" gets the same answer regardless of implementation — yes, from the Trace.
+Together these mean: server state is an optimization; the Trace is the specification of what happened. A reviewer asking "is this system replayable?" gets the same answer regardless of implementation — yes, from the Trace.
 
 ## 7. Required Endpoints
 
@@ -229,11 +231,11 @@ GET  /aep/agents/{agentId}    → AgentContract
 
 Unknown filter parameters MUST be rejected with `-32602` (invalid params). Silent ignore is forbidden — a typo in a filter MUST NOT produce a false full result.
 
-**AEP-REQ-026**: Each `AgentSummary` MUST include an `authorizedModes` field listing evaluation modes the *calling identity* is authorised to use for that agent, derived from the intersection of the agent's declared `evaluationModes` and the caller's authorisation. Unauthorised agents MUST be omitted from the list entirely (AEP-REQ-023), not surfaced with empty `authorizedModes`.
+**AEP-REQ-026**: Each `AgentSummary` MUST include an `authorizedModes` field listing evaluation modes the *calling identity* is authorized to use for that agent, derived from the intersection of the agent's declared `evaluationModes` and the caller's authorization. Unauthorized agents MUST be omitted from the list entirely (AEP-REQ-023), not surfaced with empty `authorizedModes`.
 
 **AEP-REQ-027**: `GET /aep/agents` SHOULD support an `updatedSince` query parameter (RFC 3339 timestamp). When provided, responses include only agents whose contract was updated at or after the timestamp. Each `AgentSummary` MUST include a `lastUpdatedAt` timestamp. Clients use this for incremental sync.
 
-**AEP-REQ-028**: The `GET /aep/agents/{agentId}` endpoint returns the full `AgentContract`. If the caller is not authorised for the agent, the server MUST return `-32001 agent_not_found` (not `-32010`) to avoid leaking the existence of unauthorised agents.
+**AEP-REQ-028**: The `GET /aep/agents/{agentId}` endpoint returns the full `AgentContract`. If the caller is not authorized for the agent, the server MUST return `-32001 agent_not_found` (not `-32010`) to avoid leaking the existence of unauthorized agents.
 
 Example list response:
 
@@ -270,10 +272,11 @@ GET /aep/agents?domain=customer-service&mode=policybox&extension=red-teaming&lim
 ### 7.2 Session (REST)
 
 ```
-POST   /aep/sessions                      → { sessionId, expiresAt }
+POST   /aep/sessions                      → { sessionId, agentId, agentVersion, testMode, state, createdAt, expiresAt }
 GET    /aep/sessions/{sessionId}          → EvaluationSession
 POST   /aep/sessions/{sessionId}/evaluate → { resultRef }
 POST   /aep/sessions/{sessionId}/report   → { resultRef, sealed: true }
+POST   /aep/sessions/{sessionId}/abort    → { aborted: true }
 DELETE /aep/sessions/{sessionId}          → { closed: true }
 ```
 
@@ -287,7 +290,7 @@ Request body for `POST /aep/sessions`:
 }
 ```
 
-For single-agent sessions, supply `agentId` and the server creates the session bound to that agent at its current version. Composite sessions — where execution spans a graph of agents — are the subject of the Composite Session Evaluation (CSE) extension (§11.7). When CSE is supported, the request body MAY instead supply a `graph` field in place of `agentId`; servers MUST accept exactly one of `agentId` or `graph`.
+For single-agent sessions, supply `agentId` and the server creates the session bound to that agent at its current version. `POST /aep/sessions` completes the `created → active` transition before returning, so successful responses return the active session summary rather than a bare allocation token. Composite sessions — where execution spans a graph of agents — are the subject of the Composite Session Evaluation (CSE) extension (§11.7). When CSE is supported, the request body MAY instead supply a `graph` field in place of `agentId`; servers MUST accept exactly one of `agentId` or `graph`.
 
 ### 7.3 Turns (REST)
 
@@ -339,6 +342,7 @@ All operations above are also callable via JSON-RPC 2.0 at `POST /aep/rpc`:
 | `aep.scenario.run` | `POST /aep/sessions/{id}/scenarios` |
 | `aep.session.evaluate` | `POST /aep/sessions/{id}/evaluate` |
 | `aep.session.report` | `POST /aep/sessions/{id}/report` |
+| `aep.session.abort` | `POST /aep/sessions/{id}/abort` |
 | `aep.session.end` | `DELETE /aep/sessions/{id}` |
 | `aep.trace.get` | `GET /aep/traces/{ref}` |
 | `aep.result.get` | `GET /aep/results/{ref}` |
@@ -364,7 +368,7 @@ All operations above are also callable via JSON-RPC 2.0 at `POST /aep/rpc`:
 
 Response shape matches the REST endpoint (AEP-REQ-022): `{ agents, nextCursor, total }`.
 
-**AEP-REQ-030**: Servers MUST expose `aep.initialize` for capability negotiation. Subsequent JSON-RPC methods called before successful initialisation return `-32011`.
+**AEP-REQ-030**: Servers MUST expose `aep.initialize` for capability negotiation. Subsequent JSON-RPC methods called before successful initialization return `-32011`.
 
 `aep.initialize` request/response shape:
 ```json
@@ -401,7 +405,7 @@ Agents MUST consume context from injected sources, not ambient ones. This is wha
 
 **AEP-REQ-034**: Every Agent Contract MUST declare `contextModel.injectionPoints`, each with a name, type, and schema.
 
-**AEP-REQ-035**: Evaluators MUST supply `injectedContext` at `POST /aep/sessions` (or `aep.session.start`), keyed by the declared injection points.
+**AEP-REQ-035**: Evaluators MUST supply `injectedContext` at `POST /aep/sessions` (or `aep.session.start`), keyed by the declared injection-point names.
 
 **AEP-REQ-036**: Servers MUST validate injected context against the injection point schemas and return `-32040` on mismatch.
 
@@ -452,7 +456,7 @@ This is the protocol's anchor: when a reviewer asks "what is the single source o
 
 **AEP-REQ-045**: Every Trace MUST contain, at minimum: all turn inputs and outputs, input/output digests, timestamps, and the session's `injectedContext` snapshot.
 
-**AEP-REQ-046**: Traces MUST carry their originating test mode. Replay of a Trace MUST NOT be authorised for a caller whose mode authorisation is below the Trace's captured mode.
+**AEP-REQ-046**: Traces MUST carry their originating test mode. Replay of a Trace MUST NOT be authorized for a caller whose mode authorization is below the Trace's captured mode.
 
 **AEP-REQ-047**: Sealed traces MUST be retrievable for at least 7 days. Implementations MAY retain longer.
 
@@ -460,7 +464,7 @@ This is the protocol's anchor: when a reviewer asks "what is the single source o
 
 ## 11. Optional Extensions
 
-Implementations MAY support these extensions. Implementations that claim support MUST honour the requirements in the relevant subsection.
+Implementations MAY support these extensions. Implementations that claim support MUST honor the requirements in the relevant subsection.
 
 ### 11.1 Policy Profile extension
 
@@ -486,7 +490,7 @@ Agents with tool access MAY publish Tool Capability declarations (`tool-capabili
 
 Servers MAY implement a red-teaming interface for adversarial testing. See [`../docs/RED-TEAMING.md`](../docs/RED-TEAMING.md).
 
-**AEP-REQ-054**: Servers claiming `red-teaming` support MUST advertise `"red-teaming"` in `capabilities.extensions` at initialisation.
+**AEP-REQ-054**: Servers claiming `red-teaming` support MUST advertise `"red-teaming"` in `capabilities.extensions` at initialization.
 
 **AEP-REQ-055**: Red-teaming sessions MUST carry `metadata.redteam: true`.
 
@@ -498,7 +502,7 @@ Servers MAY implement a red-teaming interface for adversarial testing. See [`../
 
 ### 11.4 Deterministic Replay extension
 
-Every session produces a Trace that MAY be replayed in trace-faithful form. Agents that claim *deterministic replay* support an additional guarantee: re-executing against the Trace produces byte-identical behaviour.
+Every session produces a Trace that MAY be replayed in trace-faithful form. Agents that claim *deterministic replay* support an additional guarantee: re-executing against the Trace produces byte-identical behavior.
 
 **AEP-REQ-059**: Every server MUST support Trace-faithful replay — i.e. re-reading a captured Trace. This is the required baseline; it does not require agent re-execution.
 
@@ -516,7 +520,7 @@ See [`../docs/REPLAY.md`](../docs/REPLAY.md) for the design rationale.
 
 Sessions normally produce a sealed Trace retrievable via `GET /aep/traces/{ref}` after completion. Servers MAY additionally expose the session's events as a live stream while the session is active, allowing clients to observe turn-by-turn progress, inspect intermediate state, or run partial-trace scoring before the session completes.
 
-Streaming is an observability extension, not a control extension. It does not grant clients the ability to interrupt, abort, or redirect a session; those are deferred to v0.2.
+Streaming is an observability extension, not a control extension. It does not add stream-native control semantics such as early-abort based on streamed observations, mid-stream redirection, or bidirectional steering; those are deferred to v0.2. Session abort remains available through the standard lifecycle method `aep.session.abort`.
 
 **Endpoint**
 
@@ -528,7 +532,7 @@ Last-Event-ID: {integer}   (optional, for resume)
 
 The response is a Server-Sent Events (SSE) stream conforming to [WHATWG SSE](https://html.spec.whatwg.org/multipage/server-sent-events.html). Each event MUST have a numeric `id:` (monotonically increasing per session), an `event:` type, and a JSON `data:` payload.
 
-**AEP-REQ-064**: Servers claiming `streaming` support MUST advertise `"streaming"` in `capabilities.extensions` at initialisation and MUST implement `GET /aep/sessions/{sessionId}/events` for every active session.
+**AEP-REQ-064**: Servers claiming `streaming` support MUST advertise `"streaming"` in `capabilities.extensions` at initialization and MUST implement `GET /aep/sessions/{sessionId}/events` for every active session.
 
 **AEP-REQ-065**: Stream events MUST be drawn from the following registered event types. Vendor extensions MUST use reverse-DNS prefixes (e.g. `com.example.custom.event`).
 
@@ -548,7 +552,7 @@ The response is a Server-Sent Events (SSE) stream conforming to [WHATWG SSE](htt
 
 **AEP-REQ-066**: Servers MUST emit a `stream.heartbeat` event at least every 30 seconds during an active session. Heartbeats MUST carry a sequence `id` so they count against resume offsets. Clients detecting no heartbeat for 60+ seconds SHOULD reconnect.
 
-**AEP-REQ-067**: Servers MUST honour the `Last-Event-ID` request header. When present, the server MUST replay all events with `id` strictly greater than the supplied value, in order, before emitting new events. If the supplied ID is older than the server's retention window, the server MUST respond with HTTP 409 and the client MUST fall back to polling the sealed Trace.
+**AEP-REQ-067**: Servers MUST honor the `Last-Event-ID` request header. When present, the server MUST replay all events with `id` strictly greater than the supplied value, in order, before emitting new events. If the supplied ID is older than the server's retention window, the server MUST respond with HTTP 409 and the client MUST fall back to polling the sealed Trace.
 
 **AEP-REQ-068**: Servers MUST retain a replay buffer of at least the last 1000 events or 5 minutes of stream history (whichever is larger) for each active session, to support reconnection.
 
@@ -628,7 +632,7 @@ Field semantics:
 
 **AEP-REQ-074**: When a dataset declares `agentId`, evaluators MUST validate each `examples[].input` against the agent's `inputSchema` before session submission. AEP-REQ-006 already requires per-turn validation at runtime; this extends the requirement to the whole dataset at import time so bad examples fail fast.
 
-**AEP-REQ-075**: Agents MAY publish `datasetRefs` in their Agent Contract — an array of opaque references that resolve to dataset documents (URL, OCI-style digest, internal slug). This is purely discoverability; servers MUST NOT derive behaviour from the content of referenced datasets.
+**AEP-REQ-075**: Agents MAY publish `datasetRefs` in their Agent Contract — an array of opaque references that resolve to dataset documents (URL, OCI-style digest, internal slug). This is purely discoverability; servers MUST NOT derive behavior from the content of referenced datasets.
 
 **AEP-REQ-076**: Dataset documents MUST NOT contain secrets, PII, or tenant-isolated data. Implementations SHOULD run a redaction pass before publishing a dataset (cf. AEP-REQ-077 for secret handling in the core).
 
@@ -709,7 +713,7 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 | -32005 | `scenario_invalid` | Input | No |
 | -32006 | `trace_sealed` | Immutability | No |
 | -32010 | `authorization_failed` | Auth | No |
-| -32011 | `not_initialized` | Lifecycle | No (initialise) |
+| -32011 | `not_initialized` | Lifecycle | No (initialize) |
 | -32012 | `input_schema_violation` | Contract | No (fix input) |
 | -32013 | `output_schema_violation` | Contract | Maybe (agent fault) |
 | -32020 | `rate_limited` | Resource | Yes with backoff |
@@ -757,13 +761,13 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 
 **AEP-REQ-087**: Servers SHOULD detect production environments at startup and refuse to start without explicit override; overrides MUST be logged.
 
-### 13.2 Authorisation
+### 13.2 Authorization
 
-**AEP-REQ-088**: Authorisation MUST be enforced per-agent and per-mode independently. Authorisation for one agent or mode MUST NOT imply authorisation for others.
+**AEP-REQ-088**: Authorization MUST be enforced per-agent and per-mode independently. Authorization for one agent or mode MUST NOT imply authorization for others.
 
 **AEP-REQ-089**: Tenant boundaries MUST be preserved across artifact retrieval. An evaluator scoped to tenant A MUST NOT retrieve artifacts from tenant B.
 
-**AEP-REQ-090**: Every authorisation decision MUST be logged with session attribution.
+**AEP-REQ-090**: Every authorization decision MUST be logged with session attribution.
 
 ### 13.3 Rate limiting
 
@@ -789,7 +793,7 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 
 ### 13.6 Audit logging
 
-**AEP-REQ-098**: Servers MUST log authentication attempts, authorisation decisions, session lifecycle transitions, and errors.
+**AEP-REQ-098**: Servers MUST log authentication attempts, authorization decisions, session lifecycle transitions, and errors.
 
 **AEP-REQ-099**: Audit logs MUST be tamper-evident, retained at least 90 days, and queryable by session, evaluator, and agent.
 
@@ -805,7 +809,7 @@ The expected deployment pattern for AEP is not "always-on production endpoint" b
 
 **AEP-REQ-121**: Servers SHOULD support *ephemeral evaluator tokens* — credentials that are issued per evaluation run, scoped to a specific set of agents and modes, and automatically expire at the end of the run or a fixed TTL (recommended: ≤24 hours). Long-lived API keys MUST NOT be required for evaluation; they are an anti-pattern.
 
-**AEP-REQ-122**: Servers SHOULD support *scoped evaluation sessions* — sessions whose authorisation is restricted at creation time to specific agents, modes, extensions, and (where applicable) datasets. A scoped session MUST NOT be usable to evaluate agents outside its declared scope.
+**AEP-REQ-122**: Servers SHOULD support *scoped evaluation sessions* — sessions whose authorization is restricted at creation time to specific agents, modes, extensions, and (where applicable) datasets. A scoped session MUST NOT be usable to evaluate agents outside its declared scope.
 
 **AEP-REQ-123**: Servers SHOULD support *time-bound access* — evaluator credentials and session scopes with declared `notAfter` timestamps. Attempts to use a credential or scope after its `notAfter` MUST be rejected with `-32010`.
 
@@ -832,7 +836,7 @@ AEP has three implementer roles. The authoritative per-role requirement lists ar
 ### 15.1 AEP-Agent
 Applies to: any agent published for AEP evaluation.
 
-An agent MUST declare one of: {blackbox-only}, {blackbox + graybox}, or richer. Agents declaring modes beyond graybox MUST honour all requirements for those modes. See [`../docs/CONFORMANCE.md`](../docs/CONFORMANCE.md) §"AEP-Agent" for the requirement list.
+An agent MUST declare at least {blackbox + graybox}. Richer mode sets are additive. Agents declaring modes beyond graybox MUST honor all requirements for those modes. See [`../docs/CONFORMANCE.md`](../docs/CONFORMANCE.md) §"AEP-Agent" for the requirement list.
 
 ### 15.2 AEP-Server
 Applies to: any server implementing the AEP wire protocol.
