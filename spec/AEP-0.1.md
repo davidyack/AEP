@@ -717,7 +717,7 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 
 | Code | Name | Category | Retry |
 |------|------|----------|-------|
-| -32001 | `agent_not_found` | Discovery / existence-hiding artifact fetch | No |
+| -32001 | `agent_not_found` | Discovery and existence-hiding artifact fetch | No |
 | -32002 | `session_expired` | Lifecycle | No (create new) |
 | -32003 | `mode_not_supported` | Modes | No |
 | -32005 | `scenario_invalid` | Input | No |

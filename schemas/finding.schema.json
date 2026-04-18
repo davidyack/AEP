@@ -19,7 +19,7 @@
       "type": "array",
       "items": {"$ref": "#/$defs/EvidencePointer"},
       "minItems": 1,
-      "description": "Typed pointers into artifacts with opaque high-entropy evidence target references."
+      "description": "Typed pointers into artifacts with opaque high-entropy evidence target references (AEP-REQ-126)."
     },
     "reproducible": {
       "type": "object",

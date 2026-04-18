@@ -47,7 +47,7 @@
     "canonicalSerialization": {
       "type": "string",
       "description": "Canonical serialization method used for signing (AEP-REQ-124).",
-      "enum": ["JCS-RFC8785"]
+      "const": "JCS-RFC8785"
     },
     "canonicalDigest": {
       "type": "string",
