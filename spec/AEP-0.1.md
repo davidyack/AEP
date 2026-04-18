@@ -769,10 +769,9 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 
 **AEP-REQ-086**: AEP endpoints MUST NOT be reachable from public production traffic paths.
 
-**AEP-REQ-087**: Servers MUST detect production environments at startup and refuse to start unless an explicit, auditable override is configured; overrides MUST be logged.
+**AEP-REQ-087**: Servers MUST detect production environments at startup and refuse to start unless an explicit, auditable override is configured; overrides MUST be logged. If production detection is ambiguous or unavailable, servers MUST fail closed and treat the environment as production.
 
 Production-environment detection SHOULD be policy-driven (configuration and deployment metadata), not heuristic-only. Typical signals include explicit environment flags, deployment profile markers, or workload metadata from the hosting platform.
-If detection is ambiguous or unavailable, servers MUST fail closed and treat the environment as production.
 
 **AEP-REQ-129**: AEP deployment MUST satisfy all of the following invariants:
 (a) evaluation endpoints are served on infrastructure logically separated from user-facing production APIs (separate origin, hostname, or network segment),
