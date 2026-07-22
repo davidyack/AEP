@@ -28,7 +28,7 @@
       "type": "array",
       "items": {
         "oneOf": [
-          {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse"]},
+          {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse", "observability-correlation"]},
           {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
         ]
       },

@@ -96,6 +96,10 @@
     },
     "replay": {
       "$ref": "#/$defs/ReplayMetadata"
+    },
+    "observability": {
+      "$ref": "#/$defs/ObservabilityRef",
+      "description": "Optional (§11.9 Observability Correlation extension). Correlates this Trace with an externally-collected telemetry trace. When populated, MUST be present before sealing (AEP-REQ-132). Absence means no correlating telemetry is available for this session."
     }
   },
   "$defs": {
@@ -142,6 +146,10 @@
         },
         "outputSensitivity": {
           "$ref": "#/$defs/SensitivityLabel"
+        },
+        "observability": {
+          "$ref": "#/$defs/ObservabilityRef",
+          "description": "Optional (§11.9 Observability Correlation extension). Identifies the externally-collected span for this turn. Independent of nodeId, which identifies the AEP agent node. Absence means no correlating telemetry is available for this turn."
         }
       }
     },
@@ -286,6 +294,25 @@
         "tags": {
           "type": "array",
           "items": {"type": "string"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "ObservabilityRef": {
+      "type": "object",
+      "required": ["provider"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Free-text identifier of the telemetry system (e.g. 'opentelemetry', 'applicationinsights'). Not enumerated by AEP; clients match on the value they know how to query."
+        },
+        "traceId": {
+          "type": "string",
+          "description": "External trace identifier. SHOULD follow W3C Trace Context hex encoding when provider is 'opentelemetry'."
+        },
+        "spanId": {
+          "type": "string",
+          "description": "External span identifier. SHOULD follow W3C Trace Context hex encoding when provider is 'opentelemetry'."
         }
       },
       "additionalProperties": false

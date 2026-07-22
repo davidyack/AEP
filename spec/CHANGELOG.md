@@ -36,6 +36,10 @@ Optional: `policy-profile`, `tool-capability`, `stream-event`, `dataset`.
 
 ## [Unreleased]
 
+### Observability Correlation extension
+
+- Added optional **Observability Correlation extension** (§11.9, extension id `observability-correlation`): an `observabilityKey` object on `AgentContract`/`AgentSummary` describing how an external telemetry system (e.g. OpenTelemetry, Application Insights) tags spans for that agent, and an `observability` correlation block on `Trace` — session-level and per-turn — carrying the external `traceId`/`spanId`. Purely additive (AEP-REQ-105, no version bump); the Trace remains self-contained and replayable without external data. Requirements AEP-REQ-131 through AEP-REQ-133.
+
 ### Security and artifact hardening
 
 - Added normative requirements for **signed sealed traces** using canonical serialization, digesting, and signature envelopes with key IDs (`kid`).

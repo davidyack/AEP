@@ -106,6 +106,7 @@ Implementations MAY support the following; if they do, they MUST follow the rele
 - **Streaming** — live SSE projection of the Trace. §11.5
 - **Dataset** — portable dataset format for agent evaluation. §11.6 + [`../docs/DATASET.md`](../docs/DATASET.md)
 - **Composite Session Evaluation (CSE) hooks** — core hooks enabling multi-agent evaluation; full extension defined in [`../docs/CSE.md`](../docs/CSE.md). §11.7
+- **Observability Correlation** — correlate AEP agents and Traces with externally-collected telemetry (e.g. OpenTelemetry). §11.9
 
 Agents MUST declare which optional extensions they support in the Agent Contract's `capabilities` field. Evaluators MUST NOT assume extension support without verification.
 
@@ -690,6 +691,53 @@ The following are explicitly out of scope for v0.1 streaming and will be revisit
 - **Bidirectional streaming** — client-supplied inputs mid-stream for interactive evaluation.
 - **Cross-session streams** — observing multiple sessions over one connection for dashboard-style use cases.
 - **Per-mode filtering** — asking for only `policy.event`s on a stream.
+
+### 11.9 Observability Correlation extension
+
+AEP's Trace is the canonical, self-contained record of a session (§10). Deployments also commonly run independent OpenTelemetry-based observability (e.g. Application Insights) for operational monitoring. Without this extension the two are disjoint: an AEP `agentId` — a coarse, per-contract identifier returned by `GET /aep/agents` — has no defined relationship to whatever identifier a telemetry backend uses to tag spans for that same agent's execution. Clients that want to build evaluation datasets by joining AEP-known agents against externally-collected traces have no spec-sanctioned way to do it.
+
+This extension (extension id: `observability-correlation`) lets a server advertise that mapping, without requiring AEP to model OpenTelemetry semantics or depend on any external system.
+
+**AEP-REQ-131**: Servers claiming observability-correlation support MUST advertise `"observability-correlation"` in `capabilities.extensions` at initialization, and SHOULD populate `observabilityKey` on every `AgentContract` (and its corresponding `AgentSummary`) for which a telemetry mapping is known. Agents with no external instrumentation simply omit the field.
+
+#### `observabilityKey` on `AgentContract` / `AgentSummary`
+
+Servers supporting this extension MAY add an `observabilityKey` object to any `AgentContract` and its corresponding `AgentSummary`:
+
+```json
+"observabilityKey": {
+  "provider": "opentelemetry",
+  "attribute": "agent.id",
+  "matchPattern": "autonomousPm.*"
+}
+```
+
+- `provider` (string, required if object present): free-text identifier of the telemetry system this mapping applies to (e.g. `"opentelemetry"`, `"applicationinsights"`). Not enumerated by this spec — clients match on the value they know how to query.
+- `attribute` (string, required): the field/dimension name in that provider's data model that carries the correlating value (e.g. the OTel span attribute key).
+- `matchPattern` (string, required): a glob-style pattern (`*` wildcard only, no full regex) that the provider's `attribute` values will match for spans belonging to this agent. Single-value equality is expressed as a pattern with no wildcard.
+
+This field is purely descriptive metadata for client-side querying; the server MUST NOT require it to serve any other endpoint.
+
+#### `observability` block on `Trace` (session-level and per-turn)
+
+Servers supporting this extension MAY attach an `observability` object to the top-level `Trace` and, independently, to any individual turn within it:
+
+```json
+"observability": {
+  "provider": "opentelemetry",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "spanId": "00f067aa0ba902b7"
+}
+```
+
+- `traceId` / `spanId` SHOULD follow W3C Trace Context ([https://www.w3.org/TR/trace-context/](https://www.w3.org/TR/trace-context/)) hex encoding when `provider` is `"opentelemetry"`, so values can be pasted directly into existing APM tooling without reformatting.
+- Per-turn `observability` rides alongside the existing per-turn `nodeId` (AEP-REQ-111) for composite sessions — the two are independent axes (`nodeId` identifies the AEP agent node; `observability` identifies the externally-collected span for that same turn).
+
+**AEP-REQ-132**: When correlating telemetry was collected for a session, servers advertising this extension MUST populate `Trace.observability` before the Trace is sealed (AEP-REQ-044); correlation identifiers MUST NOT be added after sealing. Absence of the block on a turn or Trace means no correlating telemetry is available for that unit (e.g. the span was not sampled); clients MUST treat absence as valid, not an error.
+
+**AEP-REQ-133**: Servers advertising both `streaming` (§11.5) and `observability-correlation` MUST carry observability content in the payloads of registered stream events (e.g. turn events for per-turn blocks, `stream.end` for the session-level block) such that Trace reconstruction from the stream remains lossless per AEP-REQ-114.
+
+**Non-goals.** This extension does not standardize a query API against the external telemetry backend — clients use that provider's own query surface (e.g. Application Insights KQL) with the advertised `attribute` / `matchPattern`. It also does not make the AEP Trace dependent on external data: the correlation identifiers recorded here are part of the Trace itself, while the external spans they reference remain outside AEP's record scope and are never required to interpret or replay a Trace, per §10.
 
 ## 12. Error Handling
 

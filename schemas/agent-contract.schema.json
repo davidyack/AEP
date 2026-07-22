@@ -96,6 +96,10 @@
       "type": "boolean",
       "default": false,
       "description": "When true, this agent is safe to participate as a node in a composite session (§11.7 CSE extension). Agents that assume they own the session or maintain incompatible state conventions MUST declare this false."
+    },
+    "observabilityKey": {
+      "$ref": "#/$defs/ObservabilityKey",
+      "description": "Optional (§11.9 Observability Correlation extension). Describes how spans for this agent are tagged in an external telemetry system, for client-side correlation queries. Purely descriptive; servers MUST NOT require it to serve any other endpoint."
     }
   },
   "$defs": {
@@ -176,6 +180,25 @@
         "maxConcurrentSessions": {"type": "integer", "minimum": 1}
       },
       "description": "Servers MUST enforce these limits. Clients MUST respect them. Violations return error -32020."
+    },
+    "ObservabilityKey": {
+      "type": "object",
+      "required": ["provider", "attribute", "matchPattern"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Free-text identifier of the telemetry system this mapping applies to (e.g. 'opentelemetry', 'applicationinsights'). Not enumerated by AEP; clients match on the value they know how to query."
+        },
+        "attribute": {
+          "type": "string",
+          "description": "The field/dimension name in the provider's data model that carries the correlating value (e.g. the OTel span attribute key)."
+        },
+        "matchPattern": {
+          "type": "string",
+          "description": "Glob-style pattern ('*' wildcard only, no full regex) that the provider's attribute values will match for spans belonging to this agent. Single-value equality is a pattern with no wildcard."
+        }
+      },
+      "additionalProperties": false
     },
     "TraceabilityContract": {
       "type": "object",
