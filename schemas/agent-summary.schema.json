@@ -73,11 +73,31 @@
       "type": "array",
       "items": {
         "oneOf": [
-          {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse"]},
+          {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse", "observability-correlation"]},
           {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
         ]
       },
       "description": "Optional extensions this agent declares support for."
+    },
+    "observabilityKey": {
+      "type": "object",
+      "required": ["provider", "attribute", "matchPattern"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Free-text identifier of the telemetry system this mapping applies to (e.g. 'opentelemetry', 'applicationinsights')."
+        },
+        "attribute": {
+          "type": "string",
+          "description": "The field/dimension name in the provider's data model that carries the correlating value."
+        },
+        "matchPattern": {
+          "type": "string",
+          "description": "Glob-style pattern ('*' wildcard only) matching the provider's attribute values for spans belonging to this agent."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional (§11.9 Observability Correlation extension). Mirrors the Agent Contract's observabilityKey so list clients can correlate without fetching the full contract."
     },
     "owner": {
       "type": "object",

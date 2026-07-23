@@ -148,7 +148,7 @@
       }
     ],
     "modalities": ["text"],
-    "extensions": ["policy-profile", "deterministic-replay"],
+    "extensions": ["policy-profile", "deterministic-replay", "observability-correlation"],
     "languages": ["en"],
     "outOfScope": [
       "legal-drafting",
@@ -194,5 +194,10 @@
     "toolCalls": "full",
     "policyEvents": "all",
     "modelCalls": "metadata"
+  },
+  "observabilityKey": {
+    "provider": "opentelemetry",
+    "attribute": "agent.id",
+    "matchPattern": "inquiryAssistant.*"
   }
 }

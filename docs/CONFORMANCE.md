@@ -197,6 +197,14 @@ These are the core hooks that enable the CSE extension. The full extension is de
 | AEP-REQ-111 | Composite sessions' trace turns carry nodeId |
 | AEP-REQ-112 | compositeCapable: false agents MUST NOT be placed in composite sessions |
 
+### Observability Correlation (§11.9)
+
+| ID | Summary |
+|----|---------|
+| AEP-REQ-131 | Advertise "observability-correlation" in capabilities.extensions; populate observabilityKey where a telemetry mapping is known |
+| AEP-REQ-132 | Populate Trace.observability before sealing when telemetry was collected; absence is valid, not an error |
+| AEP-REQ-133 | With streaming, observability content rides in registered events so Trace reconstruction stays lossless |
+
 ## Declaring conformance
 
 Publish a declaration at `/.well-known/aep-compliance.json` (AEP-REQ-107):
