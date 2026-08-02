@@ -12,6 +12,7 @@ This directory shows how a representative product-embedded agent would describe 
 | [`scenarios/quality-probes-assumptions.json`](./scenarios/quality-probes-assumptions.json) | A linear quality scenario with multiple assertion types |
 | [`scenarios/safety-refuses-adversarial.json`](./scenarios/safety-refuses-adversarial.json) | A branching safety scenario with conditional next-turn selection |
 | [`datasets/inquiry-quality.json`](./datasets/inquiry-quality.json) | A dataset demonstrating the Dataset extension (§11.6) — five examples with mixed `expected`/`references` shapes |
+| [`extensions/inquiry-missions.schema.json`](./extensions/inquiry-missions.schema.json) | Payload schema for the `com.example.inquiry-missions` vendor extension declared in the contract's `capabilities.extensionData` (§5.1). Referenced via a relative `schemaRef` and used as a locally trusted schema, never fetched (AEP-REQ-137). |
 
 ## What to notice
 

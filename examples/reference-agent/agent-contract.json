@@ -148,7 +148,24 @@
       }
     ],
     "modalities": ["text"],
-    "extensions": ["policy-profile", "deterministic-replay", "observability-correlation"],
+    "extensions": ["policy-profile", "deterministic-replay", "observability-correlation", "com.example.inquiry-missions"],
+    "extensionData": {
+      "com.example.inquiry-missions": {
+        "version": "1.0.0",
+        "schemaRef": "./extensions/inquiry-missions.schema.json",
+        "payload": {
+          "missions": [
+            {
+              "id": "clarify-vague-request",
+              "description": "Turn a vague user request into a well-formed problem statement.",
+              "workModes": ["interactive"],
+              "triggers": ["user-request"],
+              "supportedOutcomes": ["clarifying-questions", "reframed-problem", "handoff", "no-action"]
+            }
+          ]
+        }
+      }
+    },
     "languages": ["en"],
     "outOfScope": [
       "legal-drafting",

@@ -26,13 +26,14 @@
     },
     "extensions": {
       "type": "array",
-      "items": {
-        "oneOf": [
-          {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse", "observability-correlation"]},
-          {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
-        ]
-      },
+      "items": {"$ref": "#/$defs/ExtensionId"},
       "description": "Optional AEP extensions this agent supports. Standard values use the registered extension IDs; vendor-specific values MUST use reverse-DNS prefixes."
+    },
+    "extensionData": {
+      "type": "object",
+      "description": "Versioned extension-defined metadata. Every key MUST also appear in the extensions array. Implementations that do not understand an extension treat its payload as opaque.",
+      "propertyNames": {"$ref": "#/$defs/ExtensionId"},
+      "additionalProperties": {"$ref": "#/$defs/ExtensionData"}
     },
     "languages": {
       "type": "array",
@@ -73,6 +74,35 @@
         "inputContract": {"type": "string", "description": "Reference to a JSON Schema or description of input shape for this action."},
         "outputContract": {"type": "string", "description": "Reference to a JSON Schema or description of output shape."}
       }
+    },
+    "ExtensionId": {
+      "anyOf": [
+        {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse", "observability-correlation"]},
+        {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
+      ],
+      "description": "A registered AEP extension ID or a reverse-DNS vendor extension ID."
+    },
+    "ExtensionData": {
+      "type": "object",
+      "required": ["version", "payload"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the extension payload format and semantics. Extension authors SHOULD use semantic versioning."
+        },
+        "schemaRef": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "Optional reference to a versioned schema for the payload. Implementations MUST NOT automatically dereference untrusted schema references."
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Extension-defined structured metadata."
+        }
+      },
+      "additionalProperties": false
     },
     "QualityClaim": {
       "type": "object",

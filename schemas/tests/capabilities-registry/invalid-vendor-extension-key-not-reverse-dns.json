@@ -1,0 +1,16 @@
+{
+  "domains": [
+    {"id": "product-management", "description": "Product management"}
+  ],
+  "actions": [
+    {"id": "synthesize", "description": "Synthesize evidence"}
+  ],
+  "modalities": ["text"],
+  "extensions": ["com.example.missions"],
+  "extensionData": {
+    "agent-missions": {
+      "version": "1.0.0",
+      "payload": {}
+    }
+  }
+}

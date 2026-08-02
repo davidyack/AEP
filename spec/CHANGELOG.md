@@ -36,6 +36,15 @@ Optional: `policy-profile`, `tool-capability`, `stream-event`, `dataset`.
 
 ## [Unreleased]
 
+### Capability extension data
+
+- Added optional **`CapabilitiesRegistry.extensionData`** (§5.1), allowing registered and reverse-DNS vendor extensions to publish versioned structured metadata (`version`, optional `schemaRef`, object `payload`).
+- Preserved `capabilities.extensions` as the authoritative extension-support declaration for negotiation, discovery filtering, `AgentSummary.supportedExtensions`, and conformance declarations.
+- Defined opaque handling for unknown extensions: implementations that do not recognize an extension preserve its payload without interpreting it and do not reject otherwise valid contracts.
+- Prohibited automatic retrieval of untrusted extension schemas referenced by `schemaRef`.
+- Prohibited extension payloads from weakening AEP core semantics or carrying secrets, PII, credentials, or runtime tenant data.
+- Added requirements AEP-REQ-134 through AEP-REQ-140. Purely additive (AEP-REQ-105, no version bump).
+
 ### Observability Correlation extension
 
 - Added optional **Observability Correlation extension** (§11.9, extension id `observability-correlation`): an `observabilityKey` object on `AgentContract`/`AgentSummary` describing how an external telemetry system (e.g. OpenTelemetry, Application Insights) tags spans for that agent, and an `observability` correlation block on `Trace` — session-level and per-turn — carrying the external `traceId`/`spanId`. Purely additive (AEP-REQ-105, no version bump); the Trace remains self-contained and replayable without external data. Requirements AEP-REQ-131 through AEP-REQ-133.
