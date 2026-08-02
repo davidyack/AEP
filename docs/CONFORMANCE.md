@@ -25,6 +25,11 @@ An agent is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-003 | Contract includes all required fields | §5 |
 | AEP-REQ-004 | Input/output schemas are valid JSON Schema 2020-12 | §5 |
 | AEP-REQ-006 | Evaluator validates inputs against inputSchema before submission | §5 |
+| AEP-REQ-134 | Every extensionData key is also advertised in extensions | §5.1 |
+| AEP-REQ-135 | Extension entries contain version and object payload; schemaRef is a URI reference | §5.1 |
+| AEP-REQ-138 | Extension data does not redefine or weaken AEP core | §5.1 |
+| AEP-REQ-139 | Extension data contains no secrets, PII, credentials, or tenant runtime data | §5.1 |
+| AEP-REQ-140 | Incompatible extension changes update extension version; behavioral changes update agent version | §5.1 |
 | AEP-REQ-019 | Maintain session state across turns for multi-turn agents | §6.4 |
 | AEP-REQ-034 | Declare contextModel.injectionPoints with schemas | §8 |
 | AEP-REQ-038 | Consume context only from injected sources | §8 |
@@ -40,6 +45,12 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-001 | No evaluator-initiated tool invocation | §3 |
 | AEP-REQ-005 | Validate own Agent Contract at startup | §5 |
 | AEP-REQ-007 | Validate agent outputs against outputSchema | §5 |
+| AEP-REQ-134 | Reject own Agent Contract at startup when an extensionData key is not advertised in extensions | §5.1 |
+| AEP-REQ-135 | Extension entries contain version and object payload; schemaRef is a URI reference | §5.1 |
+| AEP-REQ-136 | Treat unknown extension payloads as opaque | §5.1 |
+| AEP-REQ-137 | Never automatically dereference arbitrary schemaRef values | §5.1 |
+| AEP-REQ-138 | Extension data does not redefine or weaken AEP core | §5.1 |
+| AEP-REQ-139 | Extension data contains no secrets, PII, credentials, or tenant runtime data | §5.1 |
 | AEP-REQ-008 | Implement five-state lifecycle | §6.1 |
 | AEP-REQ-009 | Record transitions; append-only | §6.1 |
 | AEP-REQ-010 | Reject invalid-state methods with -32030 | §6.1 |
@@ -128,13 +139,15 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | ID | Summary | Spec |
 |----|---------|------|
 | AEP-REQ-006 | Validate inputs against agent's inputSchema | §5 |
+| AEP-REQ-136 | Treat unknown extension payloads as opaque | §5.1 |
+| AEP-REQ-137 | Never automatically dereference arbitrary schemaRef values | §5.1 |
 | AEP-REQ-029 | Use idempotency keys correctly when retrying | §7.3 |
 | AEP-REQ-082 | Respect retryAfterMs | §12.3 |
 | AEP-REQ-083 | Don't retry non-retryable errors | §12.3 |
 
-### Capability Extension Data (§5.1)
+### Capability Extension Data (§5.1) — cross-role summary
 
-Apply to any implementation publishing or processing `CapabilitiesRegistry.extensionData`.
+Non-authoritative convenience view of the §5.1 requirements. The per-role tables above are the authoritative lists; every ID below also appears there under each role it binds.
 
 | ID | Role | Summary |
 |----|------|---------|

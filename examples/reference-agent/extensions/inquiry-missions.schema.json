@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InquiryMissionsExtensionPayload",
+  "description": "Payload schema for the com.example.inquiry-missions vendor extension, version 1.0.0. Referenced by the reference agent's capabilities.extensionData entry via a relative schemaRef; per AEP-REQ-137, validators use it as a locally installed, explicitly trusted schema rather than dereferencing a remote URL.",
+  "type": "object",
+  "required": ["missions"],
+  "properties": {
+    "missions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "workModes"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "description": {"type": "string"},
+          "workModes": {
+            "type": "array",
+            "items": {"enum": ["interactive", "background"]},
+            "minItems": 1
+          },
+          "triggers": {"type": "array", "items": {"type": "string"}},
+          "supportedOutcomes": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
