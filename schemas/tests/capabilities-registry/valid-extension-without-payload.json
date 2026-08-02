@@ -1,0 +1,10 @@
+{
+  "domains": [
+    {"id": "product-management", "description": "Product management"}
+  ],
+  "actions": [
+    {"id": "synthesize", "description": "Synthesize evidence"}
+  ],
+  "modalities": ["text"],
+  "extensions": ["com.example.missions"]
+}

@@ -1,0 +1,18 @@
+{
+  "domains": [
+    {"id": "product-management", "description": "Product management"}
+  ],
+  "actions": [
+    {"id": "synthesize", "description": "Synthesize evidence"}
+  ],
+  "modalities": ["text"],
+  "extensions": ["com.unknown.vendor-feature"],
+  "extensionData": {
+    "com.unknown.vendor-feature": {
+      "version": "7",
+      "payload": {
+        "unknownField": true
+      }
+    }
+  }
+}

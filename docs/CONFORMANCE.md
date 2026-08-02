@@ -132,6 +132,20 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-082 | Respect retryAfterMs | §12.3 |
 | AEP-REQ-083 | Don't retry non-retryable errors | §12.3 |
 
+### Capability Extension Data (§5.1)
+
+Apply to any implementation publishing or processing `CapabilitiesRegistry.extensionData`.
+
+| ID | Role | Summary |
+|----|------|---------|
+| AEP-REQ-134 | Agent / Server | Every extensionData key is also advertised in extensions |
+| AEP-REQ-135 | Agent / Server | Extension entries contain version and object payload; schemaRef is a URI reference |
+| AEP-REQ-136 | Server / Evaluator | Unknown extension payloads are treated as opaque |
+| AEP-REQ-137 | Server / Evaluator | Arbitrary schemaRef values are not automatically dereferenced |
+| AEP-REQ-138 | Agent / Server | Extension data cannot redefine or weaken AEP core |
+| AEP-REQ-139 | Agent / Server | Extension data contains no secrets, PII, credentials, or tenant runtime data |
+| AEP-REQ-140 | Agent | Incompatible extension changes update extension version; behavioral changes update agent version |
+
 ## Optional-extension requirements
 
 Only required for implementations claiming the extension.

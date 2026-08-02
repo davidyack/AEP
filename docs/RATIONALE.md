@@ -114,6 +114,14 @@ AEP names replay as one of the six modes because evaluators routinely want to re
 
 The v0.1 spec names replay but does not yet specify the trace format that makes it deterministic. This is an acknowledged gap and an explicit v0.2 priority. Naming the mode now is a commitment to treat the gap seriously rather than discover it after the trace format has already been frozen.
 
+## Why extension payloads are parallel to the extension ID array
+
+`capabilities.extensions` began as an array of string IDs, and evaluators, discovery filters (`GET /aep/agents?extension=...`), capability-intersection logic, and contract-diffing tools all consume it that way. When extensions needed to publish structured metadata — missions, operating modes, autonomy declarations — the obvious move was to let array entries be either strings or objects. We rejected that: a mixed-shape array complicates every existing deserializer, makes extension filtering and capability intersection conditional on entry shape, and turns a backward-compatible addition into a breaking change.
+
+Instead, `extensionData` is a parallel map keyed by extension ID. The array stays the authoritative, simple answer to "which extensions does this agent support"; the map carries optional versioned detail for extensions that need it. The cost is one cross-field invariant — every `extensionData` key must appear in `extensions` (AEP-REQ-134) — which portable JSON Schema 2020-12 cannot express cleanly, so it is enforced as a contract-validation requirement rather than a schema constraint. That is a smaller price than making every consumer of the extensions array shape-aware.
+
+The payload envelope (`version`, optional `schemaRef`, `payload`) is deliberately minimal. Payload formats version independently of the protocol so vendor extensions can evolve without AEP releases, and `schemaRef` is descriptive rather than operational: implementations must not auto-fetch arbitrary schema URLs, because doing so would introduce SSRF surface, availability coupling, and mutable-schema attacks into contract validation.
+
 ## Why the spec has an "Open Questions" section
 
 Specifications that pretend to be complete when they aren't set implementers up for unpleasant surprises. Section 17 of the spec lists what we know we haven't yet solved — streaming, scoring, branching, sandbox fidelity, replay format, multi-agent, cost attribution — so implementers know where the ice is thin.

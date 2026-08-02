@@ -47,6 +47,8 @@ All schemas are Draft 2020-12. Validate with any compliant validator:
 npx ajv validate -s schemas/agent-contract.schema.json -d your-agent-contract.json --spec=draft2020
 ```
 
+Positive and negative fixtures for schema features live under [`tests/`](./tests/) (currently [`tests/capabilities-registry/`](./tests/capabilities-registry/) for the `extensionData` property).
+
 ## Stability
 
 These are canonical, not illustrative. Schemas follow the protocol version. Breaking changes to schemas increment the protocol major version. Additive changes (new optional fields) do not.
@@ -54,3 +56,5 @@ These are canonical, not illustrative. Schemas follow the protocol version. Brea
 ## Extension
 
 Implementations may add fields using reverse-DNS prefixes (e.g. `com.example.driftScore`). Schemas with `"additionalProperties": false` reject these by default; extend via a wrapper field (`"vendorExtensions": {...}`) or subclass the schema.
+
+For extension metadata attached to an agent's capabilities, use the sanctioned carrier `CapabilitiesRegistry.extensionData` (§5.1 of the spec): a map from extension ID to a versioned envelope (`version`, optional `schemaRef`, object `payload`). Every key must also appear in `capabilities.extensions` (AEP-REQ-134).

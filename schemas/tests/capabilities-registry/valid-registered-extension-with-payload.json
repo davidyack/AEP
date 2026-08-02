@@ -1,0 +1,19 @@
+{
+  "domains": [
+    {"id": "customer-support", "description": "Customer support"}
+  ],
+  "actions": [
+    {"id": "classify", "description": "Classify inquiries"}
+  ],
+  "modalities": ["text"],
+  "extensions": ["dataset"],
+  "extensionData": {
+    "dataset": {
+      "version": "1.0.0",
+      "schemaRef": "./dataset-extension-metadata.schema.json",
+      "payload": {
+        "preferredFormats": ["jsonl"]
+      }
+    }
+  }
+}

@@ -108,7 +108,7 @@ Implementations MAY support the following; if they do, they MUST follow the rele
 - **Composite Session Evaluation (CSE) hooks** — core hooks enabling multi-agent evaluation; full extension defined in [`../docs/CSE.md`](../docs/CSE.md). §11.7
 - **Observability Correlation** — correlate AEP agents and Traces with externally-collected telemetry (e.g. OpenTelemetry). §11.9
 
-Agents MUST declare which optional extensions they support in the Agent Contract's `capabilities` field. Evaluators MUST NOT assume extension support without verification.
+Agents MUST declare which optional extensions they support in the Agent Contract's `capabilities` field. Evaluators MUST NOT assume extension support without verification. An extension may additionally publish versioned structured metadata through `capabilities.extensionData` (§5.1); the `capabilities.extensions` array remains the authoritative support declaration.
 
 ## 5. Agent Contract
 
@@ -125,6 +125,51 @@ Every AEP-compliant agent MUST publish an Agent Contract conforming to [`../sche
 **AEP-REQ-006**: Evaluators MUST validate inputs against `inputSchema` before submission.
 
 **AEP-REQ-007**: Servers MUST validate outputs against `outputSchema` before returning them; malformed outputs produce error `-32013`.
+
+### 5.1 Capability Extension Data
+
+The `CapabilitiesRegistry.extensions` array declares the optional extensions an agent supports. An extension may additionally publish structured metadata through `CapabilitiesRegistry.extensionData`.
+
+`extensionData` is a map keyed by extension ID. Each entry contains an extension version, an optional schema reference, and an extension-defined payload:
+
+```json
+{
+  "extensions": ["com.example.missions"],
+  "extensionData": {
+    "com.example.missions": {
+      "version": "1.0.0",
+      "schemaRef": "https://schemas.example.com/aep/missions/1.0/schema.json",
+      "payload": {
+        "missions": [
+          {"id": "customer-signal-synthesis", "workModes": ["interactive", "background"]}
+        ]
+      }
+    }
+  }
+}
+```
+
+An extension may be advertised without publishing an `extensionData` entry. This supports behavioral extensions that require no agent-specific metadata.
+
+Publishing an `extensionData` entry without advertising the corresponding extension is invalid.
+
+**AEP-REQ-134**: Every key present in `CapabilitiesRegistry.extensionData` MUST also be present in `CapabilitiesRegistry.extensions`. Servers MUST reject their own Agent Contract at startup when this invariant is violated.
+
+**AEP-REQ-135**: Each `extensionData` entry MUST contain a non-empty `version` and an object-valued `payload`. When `schemaRef` is present, it MUST be a valid URI reference.
+
+**AEP-REQ-136**: Implementations that do not recognize an extension MUST treat its `extensionData` payload as opaque. They MUST NOT reject an otherwise valid Agent Contract solely because they do not understand the extension payload's semantics.
+
+**AEP-REQ-137**: Implementations MUST NOT automatically dereference an arbitrary `schemaRef`. An implementation MAY validate a payload using a locally installed, explicitly trusted, or otherwise allow-listed schema. The presence of `schemaRef` does not make network retrieval a conformance requirement.
+
+**AEP-REQ-138**: An extension payload MUST NOT redefine, weaken, or contradict core AEP semantics. If extension semantics conflict with the normative AEP specification, the core AEP requirement takes precedence and the conflicting behavior is non-compliant.
+
+**AEP-REQ-139**: Extension payloads MUST NOT contain credentials, secrets, authentication tokens, personally identifiable information, or tenant-specific runtime data. Payloads describe agent capability and behavior; they are not a runtime context-injection mechanism.
+
+**AEP-REQ-140**: The `version` field MUST change when the extension payload schema or semantics change incompatibly. Changes to extension data that materially change agent behavior also require a change to the Agent Contract's `version`.
+
+Extension payloads are declarative. AEP servers MUST NOT execute code, load plugins, or modify agent behavior merely because an extension payload is present.
+
+The `extensions` array remains the authoritative extension-support declaration for capability negotiation, discovery filtering (`GET /aep/agents?extension=...`), `AgentSummary.supportedExtensions`, and conformance declarations. The presence of an `extensionData` entry does not by itself advertise support. `extensionData` is an additive optional field under the additive-capability compatibility policy (§14, AEP-REQ-105); Agent Contracts that publish only extension IDs remain valid unchanged.
 
 ## 6. Session Lifecycle and Execution Model
 
@@ -895,6 +940,8 @@ See [`../docs/THREAT-MODEL.md`](../docs/THREAT-MODEL.md) for the detailed threat
 **AEP-REQ-105**: Additive capabilities MUST NOT require a version bump.
 
 **AEP-REQ-106**: Vendor extensions MUST use reverse-DNS prefixes (e.g. `com.example.drift`) and MUST NOT override required AEP semantics.
+
+Registered and vendor extensions MAY publish versioned, schema-described metadata through `capabilities.extensionData` (§5.1). Extension payload formats version independently of the protocol version; incompatible payload changes are governed by AEP-REQ-140, not by AEP-REQ-104.
 
 ## 15. Conformance by Role
 
