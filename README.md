@@ -77,6 +77,7 @@ aep/
 │   ├── RED-TEAMING.md       # Adversarial interface spec
 │   ├── DATASET.md           # Dataset extension companion
 │   ├── CSE.md               # Composite Session Evaluation extension
+│   ├── OPERATION-CONTEXT.md # Operation Context Resolution extension (draft proposal)
 │   └── ROADMAP.md
 ├── examples/
 │   └── reference-agent/     # Fictional agent with full contract and scenarios
