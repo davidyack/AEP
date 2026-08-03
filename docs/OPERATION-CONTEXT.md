@@ -2,7 +2,7 @@
 
 *Resolving externally observed production entity references into AEP-compatible injected context.*
 
-**Extension ID:** `operation-context` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 2
+**Extension ID:** `operation-context` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 3
 
 ---
 
@@ -80,6 +80,7 @@ A reference to application-owned business state:
   "type": "task",
   "id": "42",
   "version": "17",
+  "alias": "task-42-before",
   "digest": {
     "algorithm": "sha256",
     "canonicalization": "rfc8785",
@@ -95,9 +96,10 @@ A reference to application-owned business state:
 - `type` (string, required) — application-defined entity type
 - `id` (string, required) — application-defined identifier
 - `version` (string, optional) — the revision observed by the operation
+- `alias` (string, optional) — consumer-chosen name for this reference, unique within the request. When supplied, it becomes the placement key for the resolved content (see "Context placement"), decoupling the consumer from the default key format.
 - `digest` (object, optional) — content digest recorded at observation time; see "Digest shape" below
-- `observedAt` (string, conditional) — RFC 3339 timestamp of observation. REQUIRED when `version` is absent, so a reference is never structurally incapable of historical resolution without the consumer having chosen that. When both `version` and `observedAt` are supplied and conflict, `version` takes precedence.
-- `injectionPoint` (string, optional) — the declared injection point the resolved entity content should be placed under in the returned `injectedContext`. When omitted, the content is returned in the resolution report only and the consumer maps it itself.
+- `observedAt` (string, conditional) — RFC 3339 timestamp of observation. REQUIRED when both `version` and the request-level `asOf` are absent, so a reference is never structurally incapable of historical resolution without the consumer having chosen that. Precedence for historical resolution is `version`, then per-entity `observedAt`, then request-level `asOf`.
+- `injectionPoint` (string, conditional) — the declared injection point the resolved entity content should be placed under in the returned `injectedContext`. REQUIRED on every reference when the request is agent-bound (AEP-REQ-OC-018). When omitted on an unbound request, the content is returned in the resolution report only and the consumer maps it itself.
 
 EntityReference is defined by this extension. Reviewer positions on promoting it to the core specification are split (see Open Questions); it remains extension-local in this draft because promotion is a core-spec change outside an extension proposal's authority.
 
@@ -118,7 +120,7 @@ EntityReference is defined by this extension. Reviewer positions on promoting it
 - `schemaId` / `schemaVersion` (optional) — the entity schema the canonical representation was derived from, when the provider versions entity shapes
 - `value` (required) — the digest value
 
-**AEP-REQ-OC-016**: Every digest MUST carry a `canonicalization` identifier. A resolver MUST compute digest verification under the declared scheme. If the resolver does not support the declared scheme, it MUST NOT report `current_digest_match`, MUST NOT set `digestVerified: true`, and SHOULD emit a warning identifying the unsupported scheme.
+**AEP-REQ-OC-016**: Every digest MUST carry a `canonicalization` identifier. A resolver MUST compute digest verification under the declared scheme. If the resolver does not support the declared scheme, it MUST report `digestVerification: "scheme_unsupported"` and MUST NOT report `current_digest_match` fidelity.
 
 Canonicalization is required from v0.1 deliberately: `current_digest_match` is a cross-system comparison — the digest is recorded by one implementation and verified against content canonicalized by another. Retrofitting the field later would invalidate every digest recorded in the meantime.
 
@@ -200,6 +202,7 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
       "type": "task",
       "id": "42",
       "version": "17",
+      "alias": "task-42",
       "digest": {
         "algorithm": "sha256",
         "canonicalization": "rfc8785",
@@ -214,14 +217,17 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 
 - `agent` (object, optional) — the target agent and version the resolved context is intended for. When present, the resolver MUST validate `requestedInjectionPoints` and per-entity `injectionPoint` mappings against that agent contract version's declared `contextModel.injectionPoints`, and MUST reject an unknown `agentId` or unavailable version with `-32001 agent_not_found` (existence-hiding semantics per AEP-REQ-128) rather than silently validating against a different contract version. When absent, injection-point shaping is best-effort and compatibility with any particular agent is the consumer's responsibility. The field is optional rather than required so consumers with no replay target — audit and diagnostic tooling — can resolve entity content without naming an agent.
 - `correlation` (object, optional) — external-observability correlation identifiers, in the same shape as the Observability Correlation extension (spec §11.9). Advisory: a resolver MAY use it to locate an operation-scoped snapshot or audit record, but resolution is driven by the supplied `entityReferences`.
-- `asOf` (string, optional) — RFC 3339 timestamp of the operation. Resolvers with time-travel storage use it to resolve entities as they stood at that moment, independent of versions or digests being recorded. A per-entity `observedAt` overrides `asOf` for that entity. Without `asOf`, historical fidelity is reachable only through `version` or `digest`; consumers SHOULD supply it whenever the observability system recorded an operation time.
+- `asOf` (string, optional) — RFC 3339 timestamp of the operation. Resolvers with time-travel storage use it to resolve entities as they stood at that moment, independent of versions or digests being recorded. Precedence per entity is `version`, then per-entity `observedAt`, then `asOf`. Consumers SHOULD supply it whenever the observability system recorded an operation time.
 - `entityReferences` (array, required) — the entities to resolve.
 - `requestedInjectionPoints` (array, optional) — non-entity injection-point names the consumer wants returned. The resolver returns only requested, supported, and authorized points. Omitting the field requests no injection-point context (entities only).
+
+**AEP-REQ-OC-018**: When the request includes `agent`, every entity reference MUST specify `injectionPoint`, and a resolver MUST reject an agent-bound request containing a reference without one (`-32012 input_schema_violation`). An agent-bound response returns a complete `injectedContext` ready for session creation. When the request omits `agent`, `injectionPoint` MAY be omitted; such a response is a diagnostic resolution result, and its `injectedContext` — containing only mapped content and requested points — is not complete and MUST NOT be treated as directly usable for session creation.
 
 ## Response
 
 ```json
 {
+  "resolvedAt": "2026-08-03T02:00:00Z",
   "injectedContext": {
     "user": {
       "id": "user-7",
@@ -234,7 +240,7 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
       "time": "2026-08-02T16:30:00Z"
     },
     "retrieval": {
-      "task/42": {
+      "task-42": {
         "title": "Book flights to Berlin",
         "status": "open"
       }
@@ -243,11 +249,12 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
   "resolutionReport": {
     "entities": [
       {
-        "reference": { "type": "task", "id": "42", "version": "17" },
+        "reference": { "type": "task", "id": "42", "version": "17", "alias": "task-42" },
         "injectionPoint": "retrieval",
+        "contextPath": "/retrieval/task-42",
         "status": "resolved",
         "fidelity": "historical",
-        "digestVerified": true
+        "digestVerification": "verified"
       }
     ],
     "injectionPoints": [
@@ -269,21 +276,35 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 }
 ```
 
-- `injectedContext` — the complete context object, ready to supply verbatim at `POST /aep/sessions` / `aep.session.start`. It contains both the requested non-entity injection points and the resolved entity content placed under each entity's requested `injectionPoint`, keyed `{type}/{id}` within that point. Entity content belongs *inside* `injectedContext` because AEP agents consume context only through declared injection points (AEP-REQ-038); a response that returned entities outside it would omit the primary application state from the object actually passed to session creation.
+- `resolvedAt` (RFC 3339, required) — when this resolution was performed. Frozen artifacts carry it as provenance, and time-relative fields in the response are interpreted against it.
+- `injectedContext` — the context object. On an agent-bound request it is complete and ready to supply verbatim at `POST /aep/sessions` / `aep.session.start`; on an unbound request it is a diagnostic partial (AEP-REQ-OC-018). It contains both the requested non-entity injection points and the resolved entity content placed under each entity's requested `injectionPoint` (see "Context placement"). Entity content belongs *inside* `injectedContext` because AEP agents consume context only through declared injection points (AEP-REQ-038); a response that returned entities outside it would omit the primary application state from the object actually passed to session creation.
 - `resolutionReport` — the fidelity and status record: one entry per requested entity reference and one per requested injection point. This is the part a consumer freezes alongside the artifact as provenance.
-- `resolutionReport.retentionHorizon` (RFC 3339, optional) — the earliest instant for which the resolver currently expects historical resolution to succeed. Actionable per-response: a batch consumer sweeping a week of operations can detect "I am resolving near the edge" without a second call, instead of discovering a silently degrading fidelity gradient after the fact.
-- `dataHandling` — metadata describing the effective data-use policy and transformations applied (see Security). Field names are illustrative; the shape is provider-extensible.
-- `warnings` — non-fatal notes, each with `code` and `message`.
+- `resolutionReport.retentionHorizon` (RFC 3339, optional) — the earliest instant, as of `resolvedAt`, for which the resolver expects historical resolution to succeed. Actionable per-response: a batch consumer sweeping a week of operations can detect "I am resolving near the edge" without a second call, instead of discovering a silently degrading fidelity gradient after the fact. (The advertised `retention` is a duration rather than an instant for the complementary reason: extension metadata is fetched and cached, and a cached instant goes stale.)
+- `dataHandling` — metadata describing the effective data-use policy and transformations applied (see Security). Field names are illustrative; the shape is provider-extensible. When resolved content spans sources with differing effective policies, the response-level object MUST describe the most restrictive policy that applies to any returned content; a resolver MAY additionally attach a per-entity `dataHandling` override to individual resolution entries where a less restrictive policy governs that entity.
+- `warnings` — non-fatal notes, each with `code` (stable, machine-readable) and `message`.
+
+### Context placement
+
+Entity content is placed in `injectedContext` under its target injection point, keyed by:
+
+1. the reference's `alias`, when supplied;
+2. otherwise `{type}/{id}@{version}`, when `version` was supplied;
+3. otherwise `{type}/{id}`.
+
+The version-qualified default exists because a single operation can legitimately touch the same entity at two revisions — the agent reads `task-42` at v17, then writes it, producing v18, and both matter to an evaluator (the read is the evidence, the write is the outcome). An unversioned key would silently overwrite one with the other while `resolutionReport.entities` continued to list both as resolved — a report corroborating a context that doesn't match it.
+
+**AEP-REQ-OC-019**: Every resolved entry placed in `injectedContext` MUST carry `contextPath` — a JSON Pointer (RFC 6901) from the `injectedContext` root to the placed content — and placements MUST be unique. A request whose references would produce colliding placements MUST be rejected whole with `-32012 input_schema_violation`, so a collision surfaces as an error rather than a silent drop. `contextPath` is the authoritative correlation between report and context: consumers MUST correlate by pointer rather than by reconstructing key conventions, which also keeps them independent of the injection point's value shape.
 
 ### Entity resolution entries
 
 ```json
 {
-  "reference": { "type": "task", "id": "42", "version": "17" },
+  "reference": { "type": "task", "id": "42", "version": "17", "alias": "task-42" },
   "injectionPoint": "retrieval",
+  "contextPath": "/retrieval/task-42",
   "status": "resolved",
   "fidelity": "historical",
-  "digestVerified": true,
+  "digestVerification": "verified",
   "content": {}
 }
 ```
@@ -301,17 +322,27 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 
 Composition rules:
 
-- When `status` is not `resolved`: `content` and `fidelity` MUST be absent.
-- When `status` is `resolved`: `fidelity` is REQUIRED. Content is placed in `injectedContext` under the requested `injectionPoint`; when the reference specified no `injectionPoint`, the entry's `content` field carries it instead. Content MUST NOT appear in both places.
-- `digestVerified` is present if and only if a digest was supplied in the reference: `true` when the returned content matches under the declared canonicalization, `false` when it does not. When no digest was supplied, `digestVerified` MUST be omitted, and any fidelity claim — including `historical` — is legal but stands as a resolver assertion; consumers can detect the unverified case by the field's absence.
+- When `status` is not `resolved`: `content`, `fidelity`, and `contextPath` MUST be absent.
+- When `status` is `resolved`: `fidelity` and `digestVerification` are REQUIRED. Content is placed in `injectedContext` under the requested `injectionPoint` with `contextPath` recording the placement; when the reference specified no `injectionPoint` (unbound requests only), the entry's `content` field carries it instead. Content MUST NOT appear in both places.
+
+`digestVerification` (required when resolved) is one of:
+
+| Value | Meaning |
+|-------|---------|
+| `verified` | A digest was supplied and the returned content matches under the declared canonicalization |
+| `mismatch` | A digest was supplied and the returned content does not match — positive evidence the content differs from what the operation observed |
+| `scheme_unsupported` | A digest was supplied but the resolver cannot verify under the declared canonicalization scheme — no evidence either way |
+| `not_attempted` | No digest was supplied in the reference |
+
+`mismatch` and `scheme_unsupported` are deliberately distinct values: the first is evidence of drift, the second says nothing about drift — the content may be byte-identical. Consumers MUST NOT treat `scheme_unsupported` as evidence of change. A fidelity claim accompanied by anything other than `verified` — including `historical` with `not_attempted` — is legal but stands as a resolver assertion, detectable from this field.
 
 `fidelity` (required when resolved) is one of:
 
 - `historical` — the requested historical revision was returned.
-- `current_digest_match` — a historical revision was unavailable, but current content matches the digest recorded at observation time. The resolver has demonstrated the entity has not changed; consumers MAY treat this as equivalent to the observed content.
+- `current_digest_match` — a historical revision was unavailable, but current content matches the digest recorded at observation time (`digestVerification` MUST be `verified`). The resolver has demonstrated the entity has not changed; consumers MAY treat this as equivalent to the observed content.
 - `current_version_only` — only current content was available and the resolver cannot prove it matches what the operation observed. Consumers MUST NOT silently treat this as an exact reconstruction.
 
-**AEP-REQ-OC-010**: A resolver MUST NOT report `historical` or `current_digest_match` unless the returned content matches the supplied digest (when one was supplied) under the declared canonicalization scheme. A digest mismatch MUST be reported as `version_mismatch`, or as `resolved` with `fidelity: "current_version_only"` and `digestVerified: false` when returning current content is still useful diagnostically. A resolver MUST NOT silently substitute newer content for the historical state observed by the original operation.
+**AEP-REQ-OC-010**: A resolver MUST NOT report `historical` or `current_digest_match` unless the returned content matches the supplied digest (when one was supplied) under the declared canonicalization scheme. A digest mismatch MUST be reported as `version_mismatch`, or as `resolved` with `fidelity: "current_version_only"` and `digestVerification: "mismatch"` when returning current content is still useful diagnostically. A resolver MUST NOT silently substitute newer content for the historical state observed by the original operation.
 
 **AEP-REQ-OC-013**: When any returnable content exists for an entity, the resolver MUST report `resolved` with the appropriate (possibly degraded) fidelity. `expired` is reserved for the case where no content can be returned at all. This rule exists because "historical is outside retention but current content exists" would otherwise be reportable two defensible ways, and consumers branch differently on each.
 
@@ -333,11 +364,13 @@ Each requested non-entity injection point is reported individually:
 
 ### Consumer obligations
 
-**AEP-REQ-OC-015**: A consumer producing a replay artifact from a resolution containing any `current_version_only` entity MUST mark the artifact as reduced-fidelity, and MUST NOT use it as a scoring or regression baseline without explicit operator acknowledgement. This failure mode is silent otherwise: a gold case built on drifted content grades the agent against a situation that never existed, and presents as a legitimate regression.
+**AEP-REQ-OC-015**: A consumer producing a replay artifact from a resolution containing any `current_version_only` entity MUST mark the artifact as reduced-fidelity, and MUST NOT use it as a scoring or regression baseline without explicit operator acknowledgement. This failure mode is silent otherwise: a gold case built on drifted content grades the agent against a situation that never existed, and presents as a legitimate regression. The acknowledgement mechanism is consumer-defined; a conforming example is allowing reduced-fidelity artifacts to be promoted and run while excluding them from gate-blocking runs until a reviewer records an acknowledgement, stored with attribution on the case.
+
+**AEP-REQ-OC-017**: A consumer that persists resolved content MUST persist the accompanying `dataHandling` metadata with it and MUST propagate it to any derived artifact. An artifact frozen without its policy provenance carries content whose constraints — human-review prohibitions, same-tenant evaluation limits, retention bounds — have become invisible to every downstream system.
 
 ## Digest validation
 
-When a digest is supplied in an EntityReference, the resolver SHOULD verify returned content against it under the declared canonicalization scheme and MUST report the result in `digestVerified` per the composition rules above.
+When a digest is supplied in an EntityReference, the resolver SHOULD verify returned content against it under the declared canonicalization scheme and MUST report the result in `digestVerification` per the composition rules above.
 
 This requirement chain exists for one reason: to prevent replay systems from unknowingly testing against modified production data. Requiring the canonicalization identifier keeps `current_digest_match` a verifiable claim rather than an assertion the consumer must take on trust.
 
@@ -355,6 +388,8 @@ This extension introduces no new reserved injection-point types. The core's rese
 Domain-specific state — approval status, workflow stage, and similar — belongs in entity content, or in an application-declared custom injection point using a reverse-DNS name per §8.1. If a new reserved type proves broadly necessary, that is a separate core proposal; this extension does not introduce one.
 
 **AEP-REQ-OC-012**: When the request names an `agent`, the resolver MUST validate requested injection points and entity mappings against that agent contract version and MUST return `injectedContext` values that validate against the corresponding declared schemas. When no `agent` is supplied, resolvers SHOULD still shape values against the reserved-type conventions, and compatibility with a specific agent is the consumer's responsibility.
+
+The agent's declared injection-point schema always governs the value shape; the keyed map of "Context placement" is the default shape, not a normative constraint on the contract. When the declared schema requires a different shape — an agent declaring `retrieval` as an array of documents, say — the resolver places content per the declared schema and each entry's `contextPath` records where it landed (a JSON Pointer addresses array elements as readily as map keys). If the resolver cannot produce content conforming to the declared schema for the targeted point, it MUST report that entity's `status` as `unsupported` rather than emit non-conforming context; a resolver and an agent are never both conformant yet silently incompatible.
 
 ## Security
 
@@ -401,13 +436,14 @@ An implementation advertising `operation-context`:
 3. MUST authenticate callers and authorize resolution at tenant and entity level (AEP-REQ-OC-001 through 003).
 4. MUST apply effective data-use policy before returning content and describe applied transformations (AEP-REQ-OC-007 through 009).
 5. MUST distinguish `historical`, `current_digest_match`, and `current_version_only` fidelity, and MUST NOT silently substitute modified content (AEP-REQ-OC-010).
-6. MUST verify digests under the declared canonicalization scheme or decline to claim a match (AEP-REQ-OC-016).
+6. MUST verify digests under the declared canonicalization scheme, reporting the four-state `digestVerification` outcome — never conflating "mismatched" with "could not verify" (AEP-REQ-OC-016).
 7. MUST report exactly one resolution entry per requested reference, with no truncation (AEP-REQ-OC-014), and prefer degraded-fidelity `resolved` over `expired` whenever content exists (AEP-REQ-OC-013).
-8. MUST validate against the named agent contract version when the request supplies one (AEP-REQ-OC-012).
-9. MUST use the standard AEP error registry for request-level failures.
-10. MAY support historical resolution, partial reconstruction, source-side masking, and existence-hiding (with the warning and audit obligations of AEP-REQ-OC-011).
+8. MUST validate against the named agent contract version when the request supplies one, require per-entity injection-point mappings on agent-bound requests, and distinguish complete from diagnostic responses (AEP-REQ-OC-012, AEP-REQ-OC-018).
+9. MUST record every placement with a unique `contextPath` and reject colliding placements (AEP-REQ-OC-019).
+10. MUST use the standard AEP error registry for request-level failures.
+11. MAY support historical resolution, partial reconstruction, source-side masking, and existence-hiding (with the warning and audit obligations of AEP-REQ-OC-011).
 
-Consumers producing replay artifacts are bound by AEP-REQ-OC-015 (reduced-fidelity marking).
+Consumers producing replay artifacts are bound by AEP-REQ-OC-015 (reduced-fidelity marking and acknowledgement) and AEP-REQ-OC-017 (dataHandling persistence and propagation).
 
 ## Open questions
 
