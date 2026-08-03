@@ -2,7 +2,7 @@
 
 *Resolving externally observed production entity references into AEP-compatible injected context.*
 
-**Extension ID:** `operation-context` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 3
+**Extension ID:** `operation-context` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 4
 
 ---
 
@@ -32,7 +32,7 @@ This extension is the application-side complement to the Observability Correlati
 
 ### Why standardize this in AEP
 
-Without a standard, every application invents a private resolution endpoint and every consumer writes a per-application integration. Standardizing Operation Context Resolution lets any compliant dataset builder, replay engine, audit tool, or debugging tool resolve production context without application-specific integration. The extension standardizes resolution semantics, reconstruction fidelity, and security requirements, while leaving application storage and history mechanisms implementation-defined. Because the output is a complete `injectedContext` shaped against the target agent's declared injection points (spec §8), resolved context flows directly into session creation without transformation — which is the specific value of putting this in AEP rather than leaving it as a generic snapshot API.
+Without a standard, every application invents a private resolution endpoint and every consumer writes a per-application integration. Standardizing Operation Context Resolution lets any compliant dataset builder, replay engine, audit tool, or debugging tool resolve production context without application-specific integration. The extension standardizes resolution semantics, reconstruction fidelity, and security requirements, while leaving application storage and history mechanisms implementation-defined. Because the output is an `injectedContext` shaped against the target agent's declared injection points (spec §8), with completeness reported explicitly, resolved context flows directly into session creation without transformation — which is the specific value of putting this in AEP rather than leaving it as a generic snapshot API.
 
 ## What's out of scope
 
@@ -55,7 +55,7 @@ External observability system
         │  identifies operation + entity references
         ▼
 aep.operationContext.resolve
-        │  returns complete injectedContext + fidelity report
+        │  returns injectedContext + fidelity report
         ▼
 Consumer masks and freezes the context
         │
@@ -221,13 +221,14 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 - `entityReferences` (array, required) — the entities to resolve.
 - `requestedInjectionPoints` (array, optional) — non-entity injection-point names the consumer wants returned. The resolver returns only requested, supported, and authorized points. Omitting the field requests no injection-point context (entities only).
 
-**AEP-REQ-OC-018**: When the request includes `agent`, every entity reference MUST specify `injectionPoint`, and a resolver MUST reject an agent-bound request containing a reference without one (`-32012 input_schema_violation`). An agent-bound response returns a complete `injectedContext` ready for session creation. When the request omits `agent`, `injectionPoint` MAY be omitted; such a response is a diagnostic resolution result, and its `injectedContext` — containing only mapped content and requested points — is not complete and MUST NOT be treated as directly usable for session creation.
+**AEP-REQ-OC-018**: When the request includes `agent`, every entity reference MUST specify `injectionPoint`, and a resolver MUST reject an agent-bound request containing a reference without one (`-32012 input_schema_violation`). An agent-bound response returns an `injectedContext` intended for session creation, with completeness reported explicitly per AEP-REQ-OC-020. When the request omits `agent`, `injectionPoint` MAY be omitted; such a response is a diagnostic resolution result, and its `injectedContext` — containing only mapped content and requested points — is not complete and MUST NOT be treated as directly usable for session creation.
 
 ## Response
 
 ```json
 {
   "resolvedAt": "2026-08-03T02:00:00Z",
+  "sessionReady": true,
   "injectedContext": {
     "user": {
       "id": "user-7",
@@ -277,23 +278,28 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 ```
 
 - `resolvedAt` (RFC 3339, required) — when this resolution was performed. Frozen artifacts carry it as provenance, and time-relative fields in the response are interpreted against it.
-- `injectedContext` — the context object. On an agent-bound request it is complete and ready to supply verbatim at `POST /aep/sessions` / `aep.session.start`; on an unbound request it is a diagnostic partial (AEP-REQ-OC-018). It contains both the requested non-entity injection points and the resolved entity content placed under each entity's requested `injectionPoint` (see "Context placement"). Entity content belongs *inside* `injectedContext` because AEP agents consume context only through declared injection points (AEP-REQ-038); a response that returned entities outside it would omit the primary application state from the object actually passed to session creation.
+- `sessionReady` (boolean, agent-bound responses only) — whether `injectedContext` is complete for session creation; see AEP-REQ-OC-020.
+- `injectedContext` — the context object. On an agent-bound request with `sessionReady: true` it is complete and ready to supply verbatim at `POST /aep/sessions` / `aep.session.start`; on an unbound request it is a diagnostic partial (AEP-REQ-OC-018). It contains both the requested non-entity injection points and the resolved entity content placed under each entity's requested `injectionPoint` (see "Context placement"). Entity content belongs *inside* `injectedContext` because AEP agents consume context only through declared injection points (AEP-REQ-038); a response that returned entities outside it would omit the primary application state from the object actually passed to session creation.
 - `resolutionReport` — the fidelity and status record: one entry per requested entity reference and one per requested injection point. This is the part a consumer freezes alongside the artifact as provenance.
 - `resolutionReport.retentionHorizon` (RFC 3339, optional) — the earliest instant, as of `resolvedAt`, for which the resolver expects historical resolution to succeed. Actionable per-response: a batch consumer sweeping a week of operations can detect "I am resolving near the edge" without a second call, instead of discovering a silently degrading fidelity gradient after the fact. (The advertised `retention` is a duration rather than an instant for the complementary reason: extension metadata is fetched and cached, and a cached instant goes stale.)
 - `dataHandling` — metadata describing the effective data-use policy and transformations applied (see Security). Field names are illustrative; the shape is provider-extensible. When resolved content spans sources with differing effective policies, the response-level object MUST describe the most restrictive policy that applies to any returned content; a resolver MAY additionally attach a per-entity `dataHandling` override to individual resolution entries where a less restrictive policy governs that entity.
 - `warnings` — non-fatal notes, each with `code` (stable, machine-readable) and `message`.
+
+**AEP-REQ-OC-020**: An agent-bound response MUST include `sessionReady`: `true` only when every requested entity reference reports `resolved` and was placed, and every requested injection point reports `resolved`; `false` otherwise. When `sessionReady` is `false`, consumers MUST NOT supply the response's `injectedContext` at session creation without accounting for the reported gaps. The field MUST be absent on unbound (diagnostic) responses. Rejecting a whole agent-bound request because some placement cannot be produced is deliberately *not* required: partial reconstruction stays first-class so consumers can classify near-miss operations — but the gap is machine-visible in one field rather than inferable only by cross-checking every report entry.
 
 ### Context placement
 
 Entity content is placed in `injectedContext` under its target injection point, keyed by:
 
 1. the reference's `alias`, when supplied;
-2. otherwise `{type}/{id}@{version}`, when `version` was supplied;
-3. otherwise `{type}/{id}`.
+2. otherwise `{type}:{id}@{version}`, when `version` was supplied;
+3. otherwise `{type}:{id}`.
 
-The version-qualified default exists because a single operation can legitimately touch the same entity at two revisions — the agent reads `task-42` at v17, then writes it, producing v18, and both matter to an evaluator (the read is the evidence, the write is the outcome). An unversioned key would silently overwrite one with the other while `resolutionReport.entities` continued to list both as resolved — a report corroborating a context that doesn't match it.
+The separator is `:` rather than `/` deliberately: `/` is JSON Pointer's segment separator, and a default key containing it would make every `contextPath` depend on correct RFC 6901 escaping — a trap better removed than documented.
 
-**AEP-REQ-OC-019**: Every resolved entry placed in `injectedContext` MUST carry `contextPath` — a JSON Pointer (RFC 6901) from the `injectedContext` root to the placed content — and placements MUST be unique. A request whose references would produce colliding placements MUST be rejected whole with `-32012 input_schema_violation`, so a collision surfaces as an error rather than a silent drop. `contextPath` is the authoritative correlation between report and context: consumers MUST correlate by pointer rather than by reconstructing key conventions, which also keeps them independent of the injection point's value shape.
+The version-qualified default exists because a single operation can legitimately touch the same entity at two revisions — the agent reads `task:42` at v17, then writes it, producing v18, and both matter to an evaluator (the read is the evidence, the write is the outcome). An unversioned key would silently overwrite one with the other while `resolutionReport.entities` continued to list both as resolved — a report corroborating a context that doesn't match it.
+
+**AEP-REQ-OC-019**: Every resolved entry placed in `injectedContext` MUST carry `contextPath` — a JSON Pointer (RFC 6901) from the `injectedContext` root to the placed content — and placements MUST be unique. When forming `contextPath`, each key segment MUST be escaped per RFC 6901 (`~` as `~0`, `/` as `~1`). The default key format contains neither character, but aliases and entity identifiers are arbitrary strings the specification does not control: a reference with alias `tasks/before` targeting `retrieval` yields `"contextPath": "/retrieval/tasks~1before"`, and an emitter that skips the escape produces `/retrieval/tasks/before` — a *valid* pointer addressing a different, usually nonexistent location, so the two implementations disagree silently rather than erroring. A request whose references would produce colliding placements MUST be rejected whole with `-32012 input_schema_violation`, so a collision surfaces as an error rather than a silent drop. Uniqueness is over the full pointer: the same entity MAY legitimately be placed at multiple injection points through multiple references (an agent declaring both `retrieval` and a workspace point may want the same task in both); only identical placements collide. `contextPath` is the authoritative correlation between report and context: consumers MUST correlate by pointer rather than by reconstructing key conventions, which also keeps them independent of the injection point's value shape.
 
 ### Entity resolution entries
 
@@ -334,7 +340,9 @@ Composition rules:
 | `scheme_unsupported` | A digest was supplied but the resolver cannot verify under the declared canonicalization scheme — no evidence either way |
 | `not_attempted` | No digest was supplied in the reference |
 
-`mismatch` and `scheme_unsupported` are deliberately distinct values: the first is evidence of drift, the second says nothing about drift — the content may be byte-identical. Consumers MUST NOT treat `scheme_unsupported` as evidence of change. A fidelity claim accompanied by anything other than `verified` — including `historical` with `not_attempted` — is legal but stands as a resolver assertion, detectable from this field.
+`mismatch` and `scheme_unsupported` are deliberately distinct values: the first is evidence of drift, the second says nothing about drift — the content may be byte-identical. Consumers MUST NOT treat `scheme_unsupported` as evidence of change.
+
+Fidelity and verification interact per AEP-REQ-OC-010: `current_digest_match` requires `verified`; `historical` is prohibited with `mismatch` and permitted with `verified`, `scheme_unsupported`, or `not_attempted` — in the latter two cases it stands as an unverified resolver assertion, detectable from this field.
 
 `fidelity` (required when resolved) is one of:
 
@@ -342,7 +350,7 @@ Composition rules:
 - `current_digest_match` — a historical revision was unavailable, but current content matches the digest recorded at observation time (`digestVerification` MUST be `verified`). The resolver has demonstrated the entity has not changed; consumers MAY treat this as equivalent to the observed content.
 - `current_version_only` — only current content was available and the resolver cannot prove it matches what the operation observed. Consumers MUST NOT silently treat this as an exact reconstruction.
 
-**AEP-REQ-OC-010**: A resolver MUST NOT report `historical` or `current_digest_match` unless the returned content matches the supplied digest (when one was supplied) under the declared canonicalization scheme. A digest mismatch MUST be reported as `version_mismatch`, or as `resolved` with `fidelity: "current_version_only"` and `digestVerification: "mismatch"` when returning current content is still useful diagnostically. A resolver MUST NOT silently substitute newer content for the historical state observed by the original operation.
+**AEP-REQ-OC-010**: `current_digest_match` MUST be accompanied by `digestVerification: "verified"` — it is definitionally a verification claim. `historical` MUST NOT be reported when `digestVerification` is `"mismatch"`: a mismatch against the recorded digest is contradictory evidence, and MUST surface as `version_mismatch`, or as `resolved` with `fidelity: "current_version_only"` and `digestVerification: "mismatch"` when returning the content is still useful diagnostically. `historical` with `"scheme_unsupported"` or `"not_attempted"` is permitted: it is a provenance claim grounded in the resolver's own version-addressed storage, unverified against the recorded digest, and the `digestVerification` value says exactly that. (Prohibiting it would force byte-identical content down to `current_version_only` — and into reduced-fidelity marking under AEP-REQ-OC-015 — merely because the digest's canonicalization scheme is foreign, which conflates "unverified" with "changed.") A resolver MUST NOT silently substitute newer content for the historical state observed by the original operation.
 
 **AEP-REQ-OC-013**: When any returnable content exists for an entity, the resolver MUST report `resolved` with the appropriate (possibly degraded) fidelity. `expired` is reserved for the case where no content can be returned at all. This rule exists because "historical is outside retention but current content exists" would otherwise be reportable two defensible ways, and consumers branch differently on each.
 
@@ -438,7 +446,7 @@ An implementation advertising `operation-context`:
 5. MUST distinguish `historical`, `current_digest_match`, and `current_version_only` fidelity, and MUST NOT silently substitute modified content (AEP-REQ-OC-010).
 6. MUST verify digests under the declared canonicalization scheme, reporting the four-state `digestVerification` outcome — never conflating "mismatched" with "could not verify" (AEP-REQ-OC-016).
 7. MUST report exactly one resolution entry per requested reference, with no truncation (AEP-REQ-OC-014), and prefer degraded-fidelity `resolved` over `expired` whenever content exists (AEP-REQ-OC-013).
-8. MUST validate against the named agent contract version when the request supplies one, require per-entity injection-point mappings on agent-bound requests, and distinguish complete from diagnostic responses (AEP-REQ-OC-012, AEP-REQ-OC-018).
+8. MUST validate against the named agent contract version when the request supplies one, require per-entity injection-point mappings on agent-bound requests, and report session-readiness explicitly (AEP-REQ-OC-012, AEP-REQ-OC-018, AEP-REQ-OC-020).
 9. MUST record every placement with a unique `contextPath` and reject colliding placements (AEP-REQ-OC-019).
 10. MUST use the standard AEP error registry for request-level failures.
 11. MAY support historical resolution, partial reconstruction, source-side masking, and existence-hiding (with the warning and audit obligations of AEP-REQ-OC-011).
