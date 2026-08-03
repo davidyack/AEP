@@ -2,7 +2,7 @@
 
 *Resolving externally observed production entity references into AEP-compatible injected context.*
 
-**Extension ID:** `operation-context` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft
+**Extension ID:** `operation-context` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 2
 
 ---
 
@@ -32,7 +32,7 @@ This extension is the application-side complement to the Observability Correlati
 
 ### Why standardize this in AEP
 
-Without a standard, every application invents a private resolution endpoint and every consumer writes a per-application integration. Standardizing Operation Context Resolution lets any compliant dataset builder, replay engine, audit tool, or debugging tool resolve production context without application-specific integration. The extension standardizes resolution semantics, reconstruction fidelity, and security requirements, while leaving application storage and history mechanisms implementation-defined. Because the output is shaped for AEP injection points (spec §8), resolved context flows directly into session creation without transformation — which is the specific value of putting this in AEP rather than leaving it as a generic snapshot API.
+Without a standard, every application invents a private resolution endpoint and every consumer writes a per-application integration. Standardizing Operation Context Resolution lets any compliant dataset builder, replay engine, audit tool, or debugging tool resolve production context without application-specific integration. The extension standardizes resolution semantics, reconstruction fidelity, and security requirements, while leaving application storage and history mechanisms implementation-defined. Because the output is a complete `injectedContext` shaped against the target agent's declared injection points (spec §8), resolved context flows directly into session creation without transformation — which is the specific value of putting this in AEP rather than leaving it as a generic snapshot API.
 
 ## What's out of scope
 
@@ -55,7 +55,7 @@ External observability system
         │  identifies operation + entity references
         ▼
 aep.operationContext.resolve
-        │  returns application context + fidelity report
+        │  returns complete injectedContext + fidelity report
         ▼
 Consumer masks and freezes the context
         │
@@ -82,19 +82,45 @@ A reference to application-owned business state:
   "version": "17",
   "digest": {
     "algorithm": "sha256",
+    "canonicalization": "rfc8785",
+    "schemaId": "com.example.task",
+    "schemaVersion": "3",
     "value": "ab12cd34..."
   },
-  "observedAt": "2026-08-02T16:30:00Z"
+  "observedAt": "2026-08-02T16:30:00Z",
+  "injectionPoint": "retrieval"
 }
 ```
 
 - `type` (string, required) — application-defined entity type
 - `id` (string, required) — application-defined identifier
 - `version` (string, optional) — the revision observed by the operation
-- `digest` (object, optional) — content digest recorded at observation time; `algorithm` and `value` both required when present
-- `observedAt` (string, optional) — RFC 3339 timestamp of observation; advisory. When both `version` and `observedAt` are supplied and conflict, `version` takes precedence.
+- `digest` (object, optional) — content digest recorded at observation time; see "Digest shape" below
+- `observedAt` (string, conditional) — RFC 3339 timestamp of observation. REQUIRED when `version` is absent, so a reference is never structurally incapable of historical resolution without the consumer having chosen that. When both `version` and `observedAt` are supplied and conflict, `version` takes precedence.
+- `injectionPoint` (string, optional) — the declared injection point the resolved entity content should be placed under in the returned `injectedContext`. When omitted, the content is returned in the resolution report only and the consumer maps it itself.
 
-EntityReference is defined by this extension. If other extensions later need the same shape, promoting it to the core specification is a separate proposal (see Open Questions).
+EntityReference is defined by this extension. Reviewer positions on promoting it to the core specification are split (see Open Questions); it remains extension-local in this draft because promotion is a core-spec change outside an extension proposal's authority.
+
+### Digest shape
+
+```json
+{
+  "algorithm": "sha256",
+  "canonicalization": "rfc8785",
+  "schemaId": "com.example.task",
+  "schemaVersion": "3",
+  "value": "ab12cd34..."
+}
+```
+
+- `algorithm` (required) — the hash function
+- `canonicalization` (required) — identifier of the canonicalization scheme the digest was computed under (e.g. `rfc8785` for JCS, or a provider-defined reverse-DNS identifier). The hash function and the canonicalization are different fields because they are different facts: two systems that both say `sha256` can still disagree on the bytes.
+- `schemaId` / `schemaVersion` (optional) — the entity schema the canonical representation was derived from, when the provider versions entity shapes
+- `value` (required) — the digest value
+
+**AEP-REQ-OC-016**: Every digest MUST carry a `canonicalization` identifier. A resolver MUST compute digest verification under the declared scheme. If the resolver does not support the declared scheme, it MUST NOT report `current_digest_match`, MUST NOT set `digestVerified: true`, and SHOULD emit a warning identifying the unsupported scheme.
+
+Canonicalization is required from v0.1 deliberately: `current_digest_match` is a cross-system comparison — the digest is recorded by one implementation and verified against content canonicalized by another. Retrofitting the field later would invalidate every digest recorded in the meantime.
 
 ### Operation context
 
@@ -122,7 +148,9 @@ The extension uses the standard advertisement mechanism: `operation-context` app
             "days": 30
           },
           "supportedEntityTypes": ["task", "document"],
-          "supportedInjectionPoints": ["user", "tenant", "environment"],
+          "supportedInjectionPoints": ["user", "tenant", "environment", "retrieval"],
+          "canonicalizationSchemes": ["rfc8785", "com.example.task-canon-v3"],
+          "sourceMasking": true,
           "maxEntitiesPerRequest": 50
         }
       }
@@ -134,10 +162,14 @@ The extension uses the standard advertisement mechanism: `operation-context` app
 Payload fields:
 
 - `historicalResolution` (boolean, required) — whether the host may return the historical entity revision observed by the original operation. `false` means only current state is resolvable.
-- `retention` (object, optional) — approximate window during which historical context is expected to remain resolvable. `mode` is one of `none`, `bounded`, `indefinite`, `unknown`; `days` applies to `bounded`. Informational: it does not guarantee successful resolution for any specific entity.
+- `retention` (object, optional) — approximate window during which historical context is expected to remain resolvable. `mode` is one of `none`, `bounded`, `indefinite`, `unknown`; `days` applies to `bounded`. Advisory at the advertisement level; the response carries an actionable `retentionHorizon` (see Response).
 - `supportedEntityTypes` (array, optional) — entity-reference types the resolver can resolve.
 - `supportedInjectionPoints` (array, optional) — injection-point names the resolver may return.
-- `maxEntitiesPerRequest` (integer, optional) — maximum entity references accepted per request. Requests exceeding it fail with `-32021 limit_exceeded`.
+- `canonicalizationSchemes` (array, optional) — digest canonicalization scheme identifiers the resolver can verify.
+- `sourceMasking` (boolean, optional) — whether the resolver applies source-side masking or field filtering under application policy. Advertised so consumers can predict field omissions before resolving.
+- `maxEntitiesPerRequest` (integer, optional) — maximum entity references accepted per request.
+
+Advertisement exists so consumers can preflight: a consumer planning resolution (or scheduling when mining must run, given retention) reads both the target agent's contract and this payload before issuing any request.
 
 Until the extension is registered, vendor implementations MUST use a reverse-DNS identifier (e.g. `com.example.operation-context`) per AEP-REQ-106.
 
@@ -153,11 +185,16 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 
 ```json
 {
+  "agent": {
+    "agentId": "signal-synthesis",
+    "version": "1.4.0"
+  },
   "correlation": {
     "provider": "opentelemetry",
     "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
     "spanId": "00f067aa0ba902b7"
   },
+  "asOf": "2026-08-02T16:30:00Z",
   "entityReferences": [
     {
       "type": "task",
@@ -165,23 +202,27 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
       "version": "17",
       "digest": {
         "algorithm": "sha256",
+        "canonicalization": "rfc8785",
         "value": "ab12cd34..."
-      }
+      },
+      "injectionPoint": "retrieval"
     }
   ],
   "requestedInjectionPoints": ["user", "tenant", "environment"]
 }
 ```
 
+- `agent` (object, optional) — the target agent and version the resolved context is intended for. When present, the resolver MUST validate `requestedInjectionPoints` and per-entity `injectionPoint` mappings against that agent contract version's declared `contextModel.injectionPoints`, and MUST reject an unknown `agentId` or unavailable version with `-32001 agent_not_found` (existence-hiding semantics per AEP-REQ-128) rather than silently validating against a different contract version. When absent, injection-point shaping is best-effort and compatibility with any particular agent is the consumer's responsibility. The field is optional rather than required so consumers with no replay target — audit and diagnostic tooling — can resolve entity content without naming an agent.
 - `correlation` (object, optional) — external-observability correlation identifiers, in the same shape as the Observability Correlation extension (spec §11.9). Advisory: a resolver MAY use it to locate an operation-scoped snapshot or audit record, but resolution is driven by the supplied `entityReferences`.
+- `asOf` (string, optional) — RFC 3339 timestamp of the operation. Resolvers with time-travel storage use it to resolve entities as they stood at that moment, independent of versions or digests being recorded. A per-entity `observedAt` overrides `asOf` for that entity. Without `asOf`, historical fidelity is reachable only through `version` or `digest`; consumers SHOULD supply it whenever the observability system recorded an operation time.
 - `entityReferences` (array, required) — the entities to resolve.
-- `requestedInjectionPoints` (array, optional) — injection-point names the consumer wants returned. The resolver returns only requested, supported, and authorized points. Omitting the field requests no injection-point context (entities only).
+- `requestedInjectionPoints` (array, optional) — non-entity injection-point names the consumer wants returned. The resolver returns only requested, supported, and authorized points. Omitting the field requests no injection-point context (entities only).
 
 ## Response
 
 ```json
 {
-  "resolvedContext": {
+  "injectedContext": {
     "user": {
       "id": "user-7",
       "role": "travel-coordinator"
@@ -191,39 +232,55 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
     },
     "environment": {
       "time": "2026-08-02T16:30:00Z"
-    }
-  },
-  "unsupportedInjectionPoints": [],
-  "entityResolutions": [
-    {
-      "reference": {
-        "type": "task",
-        "id": "42",
-        "version": "17"
-      },
-      "status": "resolved",
-      "fidelity": "historical",
-      "digestVerified": true,
-      "content": {
+    },
+    "retrieval": {
+      "task/42": {
         "title": "Book flights to Berlin",
         "status": "open"
       }
     }
-  ],
+  },
+  "resolutionReport": {
+    "entities": [
+      {
+        "reference": { "type": "task", "id": "42", "version": "17" },
+        "injectionPoint": "retrieval",
+        "status": "resolved",
+        "fidelity": "historical",
+        "digestVerified": true
+      }
+    ],
+    "injectionPoints": [
+      { "name": "user", "status": "resolved" },
+      { "name": "tenant", "status": "resolved" },
+      { "name": "environment", "status": "resolved" }
+    ],
+    "retentionHorizon": "2026-07-04T00:00:00Z"
+  },
+  "dataHandling": {
+    "maskingApplied": true,
+    "restrictedFieldsOmitted": true,
+    "evaluationUse": "same-tenant",
+    "humanReviewAllowed": false,
+    "policyRef": "capture-policy-42",
+    "policyVersion": "7"
+  },
   "warnings": []
 }
 ```
 
-- `resolvedContext` — context keyed by injection-point name, shaped so it can be supplied directly as `injectedContext` at `POST /aep/sessions` / `aep.session.start` without transformation. See "Injection point integration" below.
-- `unsupportedInjectionPoints` — requested injection points the resolver does not support or the caller is not authorized to receive. Explicit, so consumers can classify reconstructions as complete or partial.
-- `entityResolutions` — one entry per requested EntityReference, in request order.
-- `warnings` — non-fatal notes (e.g. an entity near its retention boundary), each with `code` and `message`.
+- `injectedContext` — the complete context object, ready to supply verbatim at `POST /aep/sessions` / `aep.session.start`. It contains both the requested non-entity injection points and the resolved entity content placed under each entity's requested `injectionPoint`, keyed `{type}/{id}` within that point. Entity content belongs *inside* `injectedContext` because AEP agents consume context only through declared injection points (AEP-REQ-038); a response that returned entities outside it would omit the primary application state from the object actually passed to session creation.
+- `resolutionReport` — the fidelity and status record: one entry per requested entity reference and one per requested injection point. This is the part a consumer freezes alongside the artifact as provenance.
+- `resolutionReport.retentionHorizon` (RFC 3339, optional) — the earliest instant for which the resolver currently expects historical resolution to succeed. Actionable per-response: a batch consumer sweeping a week of operations can detect "I am resolving near the edge" without a second call, instead of discovering a silently degrading fidelity gradient after the fact.
+- `dataHandling` — metadata describing the effective data-use policy and transformations applied (see Security). Field names are illustrative; the shape is provider-extensible.
+- `warnings` — non-fatal notes, each with `code` and `message`.
 
-### EntityResolution
+### Entity resolution entries
 
 ```json
 {
   "reference": { "type": "task", "id": "42", "version": "17" },
+  "injectionPoint": "retrieval",
   "status": "resolved",
   "fidelity": "historical",
   "digestVerified": true,
@@ -236,16 +293,17 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 | Status | Meaning |
 |--------|---------|
 | `resolved` | Content was returned; `fidelity` states how faithful it is |
-| `expired` | Historical resolution was supported but the revision is outside the retention window |
+| `expired` | No content could be returned and the requested historical revision is outside the retention window |
 | `version_mismatch` | The entity exists but no content matching the requested version or digest could be returned |
 | `not_found` | The entity cannot be found |
 | `unsupported` | The resolver does not support this entity type |
-| `unauthorized` | The caller is not authorized for this entity |
+| `unauthorized` | The caller is not authorized for this entity, or the effective data-use policy prohibits returning it |
 
 Composition rules:
 
 - When `status` is not `resolved`: `content` and `fidelity` MUST be absent.
-- When `status` is `resolved`: `fidelity` and `content` are REQUIRED; `digestVerified` is present when a digest was supplied in the reference.
+- When `status` is `resolved`: `fidelity` is REQUIRED. Content is placed in `injectedContext` under the requested `injectionPoint`; when the reference specified no `injectionPoint`, the entry's `content` field carries it instead. Content MUST NOT appear in both places.
+- `digestVerified` is present if and only if a digest was supplied in the reference: `true` when the returned content matches under the declared canonicalization, `false` when it does not. When no digest was supplied, `digestVerified` MUST be omitted, and any fidelity claim — including `historical` — is legal but stands as a resolver assertion; consumers can detect the unverified case by the field's absence.
 
 `fidelity` (required when resolved) is one of:
 
@@ -253,31 +311,50 @@ Composition rules:
 - `current_digest_match` — a historical revision was unavailable, but current content matches the digest recorded at observation time. The resolver has demonstrated the entity has not changed; consumers MAY treat this as equivalent to the observed content.
 - `current_version_only` — only current content was available and the resolver cannot prove it matches what the operation observed. Consumers MUST NOT silently treat this as an exact reconstruction.
 
-**AEP-REQ-OC-010**: A resolver MUST NOT report `historical` or `current_digest_match` unless the returned content matches the supplied digest (when one was supplied). A digest mismatch MUST be reported as `version_mismatch`, or as `resolved` with `fidelity: "current_version_only"` and `digestVerified: false` when returning current content is still useful diagnostically. A resolver MUST NOT silently substitute newer content for the historical state observed by the original operation.
+**AEP-REQ-OC-010**: A resolver MUST NOT report `historical` or `current_digest_match` unless the returned content matches the supplied digest (when one was supplied) under the declared canonicalization scheme. A digest mismatch MUST be reported as `version_mismatch`, or as `resolved` with `fidelity: "current_version_only"` and `digestVerified: false` when returning current content is still useful diagnostically. A resolver MUST NOT silently substitute newer content for the historical state observed by the original operation.
 
-**AEP-REQ-OC-011**: Resolvers subject to existence-hiding policy MAY report `unauthorized` entities as `not_found`, consistent with the core's existence-hiding semantics (AEP-REQ-128). Consumers MUST NOT infer entity existence from `not_found`.
+**AEP-REQ-OC-013**: When any returnable content exists for an entity, the resolver MUST report `resolved` with the appropriate (possibly degraded) fidelity. `expired` is reserved for the case where no content can be returned at all. This rule exists because "historical is outside retention but current content exists" would otherwise be reportable two defensible ways, and consumers branch differently on each.
 
-Per-entity conditions are reported in `entityResolutions`; partial reconstruction is a first-class outcome, not an error. Request-level failures (authentication, malformed request, rate limits, limits exceeded) use the standard AEP error registry (spec §12). The extension defines no new top-level error model and no new error codes.
+**AEP-REQ-OC-014**: The response MUST contain exactly one `resolutionReport.entities` entry per requested reference, in request order. A resolver MUST NOT truncate the reference list; a request exceeding `maxEntitiesPerRequest` MUST be rejected whole with `-32021 limit_exceeded`. This makes completeness a checkable invariant rather than a consumer diligence obligation.
+
+**AEP-REQ-OC-011**: Resolvers subject to existence-hiding policy MAY report `unauthorized` entities as `not_found`, consistent with the core's existence-hiding semantics (AEP-REQ-128). A resolver doing so MUST include a response-level warning that existence-hiding is in effect — so consumers know their `not_found` set is untrustworthy as a deletion signal rather than assuming it isn't — and the audit record (AEP-REQ-OC-006) MUST carry the true per-entity outcome. Consumers MUST NOT infer entity existence or absence from `not_found` when that warning is present.
+
+Entity resolution entries reserve a `proof` field for a future signed-attestation capability (see Open Questions), so adding it later is a compatible change.
+
+### Injection point resolution entries
+
+Each requested non-entity injection point is reported individually:
+
+```json
+{ "name": "user", "status": "resolved" }
+```
+
+`status` is one of `resolved`, `unsupported`, `unauthorized`, `not_found`, `unavailable`. Unsupported and unauthorized are distinct outcomes with different remedies and MUST NOT be conflated where policy permits disclosure; a resolver applying existence-hiding MAY collapse `unauthorized` and `not_found` into `unavailable`, under the same warning and audit obligations as AEP-REQ-OC-011.
+
+### Consumer obligations
+
+**AEP-REQ-OC-015**: A consumer producing a replay artifact from a resolution containing any `current_version_only` entity MUST mark the artifact as reduced-fidelity, and MUST NOT use it as a scoring or regression baseline without explicit operator acknowledgement. This failure mode is silent otherwise: a gold case built on drifted content grades the agent against a situation that never existed, and presents as a legitimate regression.
 
 ## Digest validation
 
-When a digest is supplied in an EntityReference, the resolver SHOULD verify returned content against it and report the result in `digestVerified`. Digests SHOULD be computed over a canonical representation defined by the entity provider; the canonicalization scheme is identified by `digest.algorithm` conventions the provider documents (see Open Questions).
+When a digest is supplied in an EntityReference, the resolver SHOULD verify returned content against it under the declared canonicalization scheme and MUST report the result in `digestVerified` per the composition rules above.
 
-This requirement chain exists for one reason: to prevent replay systems from unknowingly testing against modified production data.
+This requirement chain exists for one reason: to prevent replay systems from unknowingly testing against modified production data. Requiring the canonicalization identifier keeps `current_digest_match` a verifiable claim rather than an assertion the consumer must take on trust.
 
 ## Injection point integration
 
-`resolvedContext` is keyed by injection-point names and shaped for direct use as `injectedContext` at session creation, subject to the target agent's declared `contextModel.injectionPoints` schemas (AEP-REQ-034 through AEP-REQ-036).
+`injectedContext` is keyed by injection-point names and returned complete, for direct use at session creation subject to the target agent's declared `contextModel.injectionPoints` schemas (AEP-REQ-034 through AEP-REQ-036).
 
 This extension introduces no new reserved injection-point types. The core's reserved types (spec §8.1) cover the common cases:
 
 - `user` — the acting user profile
 - `tenant` — tenant or workspace configuration
 - `environment` — locale, timezone, feature flags; the observed clock belongs here (e.g. `environment.time`)
+- `retrieval` — simulated retrieval results; the natural home for resolved entity content an agent originally obtained by lookup
 
 Domain-specific state — approval status, workflow stage, and similar — belongs in entity content, or in an application-declared custom injection point using a reverse-DNS name per §8.1. If a new reserved type proves broadly necessary, that is a separate core proposal; this extension does not introduce one.
 
-**AEP-REQ-OC-012**: Resolvers SHOULD return `resolvedContext` values that validate against the corresponding injection-point schemas declared in the relevant Agent Contract, so consumers can pass resolved context to session creation without transformation.
+**AEP-REQ-OC-012**: When the request names an `agent`, the resolver MUST validate requested injection points and entity mappings against that agent contract version and MUST return `injectedContext` values that validate against the corresponding declared schemas. When no `agent` is supplied, resolvers SHOULD still shape values against the reserved-type conventions, and compatibility with a specific agent is the consumer's responsibility.
 
 ## Security
 
@@ -297,19 +374,23 @@ An implementation MAY internally access production application data in order to 
 
 **AEP-REQ-OC-003**: Possession of an entity reference, digest, correlation identifier, trace identifier, or version MUST NOT confer authorization. References are routinely present in telemetry visible to parties who must not see entity content.
 
-**AEP-REQ-OC-004**: The resolver MUST return only requested, supported, and authorized injection points.
+**AEP-REQ-OC-004**: The resolver MUST return only requested, supported, and authorized injection points, reporting each requested point's outcome per the injection-point resolution entries above.
 
 **AEP-REQ-OC-005**: The resolver MUST minimize returned data to the requested context. It MUST NOT return unrelated tenant or application data.
 
-**AEP-REQ-OC-006**: Successful and failed resolution requests MUST be auditable, with caller attribution, consistent with the core audit requirements (AEP-REQ-090, AEP-REQ-098).
+**AEP-REQ-OC-006**: Successful and failed resolution requests MUST be auditable, with caller attribution, consistent with the core audit requirements (AEP-REQ-090, AEP-REQ-098). Where existence-hiding collapses a response status, the audit record MUST carry the true outcome.
 
-**AEP-REQ-OC-007**: Resolvers SHOULD support field-level filtering and source-side masking where required by application policy.
+**AEP-REQ-OC-007**: The resolver MUST apply the effective data-use policy of the owning application and tenant — including required source-side masking and field filtering — before content leaves the application boundary. Evaluator credentials do not bypass tenant data-handling settings.
+
+**AEP-REQ-OC-008**: The resolver MUST NOT return content whose evaluation use or export the effective policy prohibits. Policy denial is reported as `unauthorized` (subject to existence-hiding).
+
+**AEP-REQ-OC-009**: When masking or filtering was applied, or the effective policy constrains downstream use (retention limits, human-review prohibitions, same-tenant-only evaluation), the response MUST include `dataHandling` metadata describing the effective policy and transformations, so downstream systems can honor constraints they cannot otherwise see.
 
 ## Privacy
 
-The resolver SHOULD return only the business context required to reconstruct the requested situation. Applications MAY omit fields the caller is not authorized to access; omissions SHOULD be detectable (e.g. via `warnings` or `unsupportedInjectionPoints`) rather than silent where policy permits.
+The resolver SHOULD return only the business context required to reconstruct the requested situation. Applications MAY omit fields the caller is not authorized to access; omissions SHOULD be detectable (via `dataHandling`, `warnings`, or per-point statuses) rather than silent where policy permits.
 
-Consumers remain responsible for masking, retention, storage, and governance of resolved content after receipt. Resolved content is production data until the consumer's own controls say otherwise.
+Consumers remain responsible for masking, retention, storage, and governance of resolved content after receipt, within the constraints declared in `dataHandling`. Resolved content is production data until the consumer's own controls say otherwise.
 
 ## Conformance summary
 
@@ -318,16 +399,18 @@ An implementation advertising `operation-context`:
 1. MUST advertise the extension through `capabilities.extensions`, with metadata in `capabilities.extensionData` per §5.1.
 2. MUST expose equivalent JSON-RPC and REST surfaces.
 3. MUST authenticate callers and authorize resolution at tenant and entity level (AEP-REQ-OC-001 through 003).
-4. MUST distinguish `historical`, `current_digest_match`, and `current_version_only` fidelity, and MUST NOT silently substitute modified content (AEP-REQ-OC-010).
-5. MUST report per-entity conditions explicitly through `EntityResolution.status`.
-6. MUST use the standard AEP error registry for request-level failures.
-7. SHOULD verify supplied digests and report `digestVerified`.
-8. SHOULD shape `resolvedContext` against declared injection points (AEP-REQ-OC-012).
-9. MAY support historical resolution, partial reconstruction, and source-side masking.
+4. MUST apply effective data-use policy before returning content and describe applied transformations (AEP-REQ-OC-007 through 009).
+5. MUST distinguish `historical`, `current_digest_match`, and `current_version_only` fidelity, and MUST NOT silently substitute modified content (AEP-REQ-OC-010).
+6. MUST verify digests under the declared canonicalization scheme or decline to claim a match (AEP-REQ-OC-016).
+7. MUST report exactly one resolution entry per requested reference, with no truncation (AEP-REQ-OC-014), and prefer degraded-fidelity `resolved` over `expired` whenever content exists (AEP-REQ-OC-013).
+8. MUST validate against the named agent contract version when the request supplies one (AEP-REQ-OC-012).
+9. MUST use the standard AEP error registry for request-level failures.
+10. MAY support historical resolution, partial reconstruction, source-side masking, and existence-hiding (with the warning and audit obligations of AEP-REQ-OC-011).
+
+Consumers producing replay artifacts are bound by AEP-REQ-OC-015 (reduced-fidelity marking).
 
 ## Open questions
 
-1. Should `EntityReference` be promoted to the core specification for reuse by other extensions, or remain extension-local until a second consumer exists?
-2. Should digest canonicalization be standardized per entity type (provider-declared scheme identifiers traveling with the digest), or left fully implementation-defined in v0.1?
-3. Should resolvers be able to cryptographically attest that returned content corresponds to the requested revision and digest (signed resolution proofs)? Likely a later-version concern.
-4. Should source-side masking capability be advertised in the extension payload so consumers can predict field omissions before resolving?
+1. Should `EntityReference` be promoted to the core specification? Reviewer positions are split: one implementation reports two internal consumers that need exactly this shape today; another argues promotion creates a core compatibility surface before a second *external* consumer exists. This draft keeps it extension-local — promotion is a core-spec change that should ride its own proposal — and records the demand signal here.
+2. Should canonicalization scheme identifiers be drawn from a registry (as `rfc8785` suggests) or remain fully provider-defined reverse-DNS names? v0.1 requires the identifier but does not enumerate schemes.
+3. Signed resolution proofs — cryptographic attestation that returned content corresponds to the requested revision and digest. Agreed to be a later-version concern; the `proof` field on entity resolution entries is reserved so adding it is non-breaking. Declared canonicalization plus the audit trail covers the realistic v0.1 threat.
