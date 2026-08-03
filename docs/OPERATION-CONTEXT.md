@@ -2,7 +2,7 @@
 
 *Resolving externally observed production entity references into AEP-compatible injected context.*
 
-**Extension ID:** `operation-context` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 4
+**Extension ID:** `operation-context` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 5
 
 ---
 
@@ -229,6 +229,7 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 {
   "resolvedAt": "2026-08-03T02:00:00Z",
   "sessionReady": true,
+  "weakestFidelity": "historical",
   "injectedContext": {
     "user": {
       "id": "user-7",
@@ -278,7 +279,8 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 ```
 
 - `resolvedAt` (RFC 3339, required) — when this resolution was performed. Frozen artifacts carry it as provenance, and time-relative fields in the response are interpreted against it.
-- `sessionReady` (boolean, agent-bound responses only) — whether `injectedContext` is complete for session creation; see AEP-REQ-OC-020.
+- `sessionReady` (boolean, agent-bound responses only) — whether `injectedContext` is complete for session creation; see AEP-REQ-OC-020. Completeness only — it says nothing about fidelity.
+- `weakestFidelity` (agent-bound responses only) — the weakest fidelity across all placed entities; the baseline-use counterpart to `sessionReady` (AEP-REQ-OC-020).
 - `injectedContext` — the context object. On an agent-bound request with `sessionReady: true` it is complete and ready to supply verbatim at `POST /aep/sessions` / `aep.session.start`; on an unbound request it is a diagnostic partial (AEP-REQ-OC-018). It contains both the requested non-entity injection points and the resolved entity content placed under each entity's requested `injectionPoint` (see "Context placement"). Entity content belongs *inside* `injectedContext` because AEP agents consume context only through declared injection points (AEP-REQ-038); a response that returned entities outside it would omit the primary application state from the object actually passed to session creation.
 - `resolutionReport` — the fidelity and status record: one entry per requested entity reference and one per requested injection point. This is the part a consumer freezes alongside the artifact as provenance.
 - `resolutionReport.retentionHorizon` (RFC 3339, optional) — the earliest instant, as of `resolvedAt`, for which the resolver expects historical resolution to succeed. Actionable per-response: a batch consumer sweeping a week of operations can detect "I am resolving near the edge" without a second call, instead of discovering a silently degrading fidelity gradient after the fact. (The advertised `retention` is a duration rather than an instant for the complementary reason: extension metadata is fetched and cached, and a cached instant goes stale.)
@@ -286,6 +288,8 @@ Both AEP surfaces are exposed, consistent with the core's REST/JSON-RPC equivale
 - `warnings` — non-fatal notes, each with `code` (stable, machine-readable) and `message`.
 
 **AEP-REQ-OC-020**: An agent-bound response MUST include `sessionReady`: `true` only when every requested entity reference reports `resolved` and was placed, and every requested injection point reports `resolved`; `false` otherwise. When `sessionReady` is `false`, consumers MUST NOT supply the response's `injectedContext` at session creation without accounting for the reported gaps. The field MUST be absent on unbound (diagnostic) responses. Rejecting a whole agent-bound request because some placement cannot be produced is deliberately *not* required: partial reconstruction stays first-class so consumers can classify near-miss operations — but the gap is machine-visible in one field rather than inferable only by cross-checking every report entry.
+
+`sessionReady` reports completeness, not fidelity. A `sessionReady: true` response MAY consist entirely of `current_version_only` entities; consumers MUST still apply AEP-REQ-OC-015 before using the artifact as a baseline. So that the two signals sit adjacent rather than one being buried in the report, an agent-bound response MUST also include `weakestFidelity` — the weakest fidelity across all placed entities, ordered `historical` > `current_digest_match` > `current_version_only`. A consumer's go/no-go for session creation is `sessionReady`; its go/no-go for baseline use is `weakestFidelity` plus AEP-REQ-OC-015 — one field cannot answer both questions.
 
 ### Context placement
 
