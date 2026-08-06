@@ -2,7 +2,7 @@
 
 *A normative mapping from the AEP Trace to an OpenInference span tree, so every conforming Trace can land in Phoenix, Langfuse, Arize, or any OTLP backend without hand-written glue.*
 
-**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 5
+**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 6
 
 ---
 
@@ -133,7 +133,7 @@ Rules that make its bytes unique:
 - **Serialization is JCS (RFC 8785).** Attribute maps are JSON objects, so JCS's lexicographic member ordering pins attribute order with no further rule; the same holds for every other member.
 - **Order is the projection's order.** `spans` in the total sibling emission order; `events` in event order; `links` in source order. (A span currently carries at most one link; the rule is stated so a future multi-link model needs no new decision.)
 - **Absent means absent.** No `null` members, no empty arrays or objects, no default-valued fields. A fact the projection did not produce does not appear.
-- **Timestamps are decimal strings** of nanoseconds since epoch — they exceed 2^53, so JSON numbers cannot carry them faithfully.
+- **Timestamps are decimal strings** of nanoseconds since epoch — they exceed 2^53, so JSON numbers cannot carry them faithfully — produced by the pinned RFC 3339 conversion in [Timing rules](#timing-rules).
 - **`kind` is the OpenInference kind** and is the sole carrier of it in the object. Attribute values are JSON strings, booleans, or numbers exactly as mapped (numbers only where the Trace schema types the source as integer: token counts, `aep.turn.index`, `aep.error.code`, `aep.redactions.count`).
 
 Transport note: in OTLP encodings, every projected span's *structural* OTel `SpanKind` is `INTERNAL`; the canonical `kind` travels as the `openinference.span.kind` attribute per OpenInference convention. A transport encoding is conformant only if normalizing it back — hex IDs, `AnyValue` → JSON values, dropping empty/default envelope fields, folding `openinference.span.kind` into `kind` — reproduces the canonical object byte-for-byte under JCS.
@@ -299,7 +299,15 @@ Turn inputs/outputs can be large, and OTel backends commonly cap attribute value
 
 OTel spans require start and end timestamps; the projection never invents timing the Trace doesn't support without saying so. Any span with an inferred start **or** end carries `aep.timing.inferred = true`.
 
-- Elements with recorded `startedAt`/`completedAt` use them directly (RFC 3339 → epoch nanoseconds). Nothing inferred.
+The RFC 3339 → epoch-nanosecond conversion is itself pinned, because the canonical object makes the resulting strings part of byte-identity while the Trace schema permits arbitrary fractional-second precision — left loose, two implementations could truncate, round, or reject their way to different canonical objects from the same valid sealed Trace:
+
+- The timestamp converts to UTC through its offset and renders as nanoseconds since the Unix epoch, so two RFC 3339 spellings of the same instant convert identically.
+- Fractional-second digits beyond the ninth are **truncated** (dropped), never rounded — rounding can carry into the next second and cascade through minute, hour, and date.
+- A leap-second timestamp (seconds field `60`) is **clamped** to `59.999999999` of the same minute. The mapping is off by at most one second-scale instant and fully deterministic — the trade this extension always makes.
+
+Projection never fails on a valid RFC 3339 timestamp: every sealed Trace stays projectable.
+
+- Elements with recorded `startedAt`/`completedAt` use them directly under the conversion above. Nothing inferred.
 - **Root span**: start = `startedAt` (recorded, required by the schema). End = `completedAt` when present (recorded); else the **greatest** `completedAt` across turns — turns are not required to be in chronological order, so "array-last" is not necessarily latest; else `startedAt` (zero duration). Both fallbacks flag the root span inferred. `sealedAt`, though guaranteed present on sealed Traces, is deliberately not used: it bounds the session from above but includes post-completion sealing latency, and the latest turn end is the better estimate.
 - **ToolCallEvent** without `completedAt`: end = `startedAt + latencyMs` when `latencyMs` is present, else a zero-duration span at `startedAt`. Inferred either way.
 - **ModelCallRecord** carries no timestamps in the v0.1 schema. Model-call spans within a turn are laid **end-to-end in array order**: the first starts at the turn's `startedAt`; each subsequent span starts where the previous one ends; each spans its own `latencyMs` (absent → zero duration). All are flagged inferred. End-to-end placement is chosen over starting every span at the turn's `startedAt` because overlapping spans render as parallel fan-out in Phoenix/Langfuse — a false claim about the agent's behavior in the exact tools this extension serves — while sequential placement matches the common sequential-call case and is equally deterministic. Placement is then **clamped to the parent**: no model-call span's start or end may exceed the turn's `completedAt`, so a latency sum that overruns the turn (retry or queue time inside `latencyMs`, or genuinely concurrent calls) degenerates into spans capped — in the limit, zero-duration — at the turn's end rather than escaping the parent's bar, which Phoenix and Langfuse render as broken rather than approximate. Clamping against the parent is unlike clamping against recorded siblings (declined below): parent containment is a structural invariant of the tree, not an inference about ordering. See [Core hooks](#core-hooks-needed-in-the-spec) for the additive fix that removes the inference entirely.
@@ -392,7 +400,7 @@ Authorization, **mode-based access**, and existence-hiding semantics are identic
 
 **AEP-REQ-OI-007**: Sensitivity labels present in the Trace MUST project into the corresponding `aep.sensitivity.*` attributes. When the Trace carries `redactions[]`, the root span MUST carry `aep.redactions.count`; `aep.redacted = true` MUST be set on exactly the **non-root** spans matched by RFC 6901-parseable redaction paths under the whole-segment-prefix rule ([Redaction and sensitivity](#redaction-and-sensitivity)) — the root span is excluded from matching — and implementations MUST NOT apply heuristic matching to unparseable paths. `injectedContext`, `stateSnapshot`, and `seed` MUST NOT be projected.
 
-**AEP-REQ-OI-008**: Timestamps MUST follow the [Timing rules](#timing-rules), including the root-span fallback chain, `latencyMs`-based end inference for tool calls, and end-to-end sequential placement for model-call spans clamped to the enclosing turn's `completedAt`. Any span whose start or end is inferred rather than recorded MUST carry `aep.timing.inferred = true`; a span event whose time falls back MUST carry the same flag as an event attribute; zero-duration PolicyEvent spans at a recorded `timestamp` are recorded, not inferred.
+**AEP-REQ-OI-008**: Timestamps MUST follow the [Timing rules](#timing-rules), including the pinned RFC 3339 conversion (UTC via offset, truncation — never rounding — beyond nine fractional digits, leap seconds clamped to `59.999999999`), the root-span fallback chain, `latencyMs`-based end inference for tool calls, and end-to-end sequential placement for model-call spans clamped to the enclosing turn's `completedAt`. Projection MUST NOT fail on any valid RFC 3339 timestamp. Any span whose start or end is inferred rather than recorded MUST carry `aep.timing.inferred = true`; a span event whose time falls back MUST carry the same flag as an event attribute; zero-duration PolicyEvent spans at a recorded `timestamp` are recorded, not inferred.
 
 **AEP-REQ-OI-009**: §11.9 `observability` blocks MUST project per the three-branch rule in [Correlation identifiers become links](#correlation-identifiers-become-links): a span link only when `provider` is `"opentelemetry"` and both identifiers are well-formed W3C values; the `aep.observability.*` attribute fallback otherwise. Recorded identifiers MUST NOT become the projected spans' own identities in any branch.
 
