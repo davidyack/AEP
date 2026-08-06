@@ -2,7 +2,7 @@
 
 *A normative mapping from the AEP Trace to an OpenInference span tree, so every conforming Trace can land in Phoenix, Langfuse, Arize, or any OTLP backend without hand-written glue.*
 
-**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 6
+**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 7
 
 ---
 
@@ -40,10 +40,30 @@ None required. [`OPERATION-CONTEXT.md`](./OPERATION-CONTEXT.md) flows context *i
 ## Design principles
 
 1. **Pure function.** The projection is computed from the sealed Trace and nothing else. No network access, no clock reads, no randomness.
-2. **Deterministic to the byte.** Same sealed Trace in, same span tree out — including trace/span IDs, which are derived by hashing stable Trace coordinates rather than generated.
+2. **Deterministic where determinism pays.** Derived identifiers and semantics are always deterministic — cross-implementation correlation breaks otherwise. Byte-level reproducibility of the full projection is an optional conformance level for tooling that needs digest-based verification, not a tax on every implementation ([Two conformance levels](#two-conformance-levels)).
 3. **Never synthesize.** If the Trace doesn't carry content (a digest-only model call under a restrictive traceability contract, a redacted field), the projection doesn't invent it. Absence in the Trace is absence in the projection. The same rule covers derived facts: the projection never infers what the Trace doesn't state (e.g. no parsing a model string into a provider).
 4. **Lossless for evaluation-relevant fields.** Trace fields with no OpenInference equivalent ride along under an `aep.*` attribute namespace rather than being dropped. Fields the projection deliberately does not carry are enumerated in [Fields deliberately not projected](#fields-deliberately-not-projected) with reasons — nothing is dropped silently.
 5. **Sensitivity travels with the data.** Sensitivity labels and redaction records project into attributes so downstream routing can honor them.
+
+## Layering: mechanics and the OpenInference profile
+
+This extension is **one projection profile**, not the projection. Nothing in AEP's canonical Trace privileges OpenInference over other observability conventions, and most of what this document defines doesn't either. The machinery divides cleanly:
+
+**Profile-independent mechanics** — the canonical projection object and its JCS serialization, position-based ID derivation with the all-zero escape, the RFC 3339 conversion, timing inference and parent clamping, content/MIME rules, the truncation model, redaction and sensitivity propagation, sibling/event emission order, correlation-block links, the `aep.*` attribute namespace, and the endpoint pattern. None of these consume OpenInference vocabulary; they answer "how does a sealed Trace become a deterministic span tree" for *any* convention set.
+
+**The OpenInference binding** — the span-kind assignments (`AGENT`/`CHAIN`/`LLM`/`TOOL`/`GUARDRAIL`), the convention attribute names (`llm.model_name`, `input.value`, `graph.node.id`, …), the pinned conventions release, the `openinference.span.kind` transport fold, and this profile's InstrumentationScope name. This is the part that is genuinely OpenInference-shaped.
+
+A different convention set — the OpenTelemetry GenAI semantic conventions (`gen_ai.*`) are the obvious candidate — would be a **sibling profile**: its own extension id, its own vocabulary binding and pinned release, the same mechanics. The design anticipates this without depending on it: the canonical object carries a `profile` member, the endpoint's final path segment names the profile (`/projections/openinference` leaves room for siblings), and the InstrumentationScope name is profile-scoped. If a second profile materializes, the mechanics should be hoisted into a shared companion (or core §) that profiles reference rather than restate — recorded as an open question below. Until then, one document carrying both layers is the cheaper shape, but the seam is drawn so hoisting is an editorial move, not a breaking one.
+
+## Two conformance levels
+
+Byte-identity is what strict tooling needs; it is not what every implementation should pay for. Requiring it universally would make every field a permanent compatibility surface, demand a canonicalization engine from platforms that just want their evaluation traces visible in Phoenix through an ordinary OpenTelemetry SDK, and fight the SDKs themselves — a batching OTel exporter does not even control span emission order. The extension therefore defines two conformance levels, declared in the advertisement:
+
+**Semantic conformance** — the baseline, required of every implementation claiming this extension. The span tree a consumer sees is right: correct spans and parent/child relationships, the pinned vocabulary and kinds, identifiers derived per [ID derivation](#id-derivation) (correlation fails without them), the timing rules with their inferred flags, correct correlation links, sensitivity and redaction behavior, no synthesis, and the never-projected fields staying unprojected. Nothing at this level depends on serialization bytes or emission order, so a stock OpenTelemetry SDK and exporter suffice.
+
+**Reproducible conformance** — optional, advertised with `reproducible: true`. Everything above, plus the [canonical projection object](#the-canonical-projection-object), JCS serialization, the total emission order, exact truncation mechanics with full-value digests, and digest-based comparison (AEP-REQ-OI-002, OI-013, OI-014). This is the level that conformance suites with golden digests, audit attestation, and collector-verification tooling build on.
+
+Semantic conformance is still verifiable — spans, relationships, attributes, and identifiers are all checkable — but by structural comparison rather than digest equality. Derived identifiers are the bridge between the levels: because IDs derive identically at both, a semantic-level implementation's spans correlate exactly with any reproducible projection of the same Trace.
 
 ## Convention pinning
 
@@ -65,6 +85,7 @@ The extension uses the standard advertisement mechanism: `openinference-projecti
         "payload": {
           "conventionsVersion": "0.1.31",
           "projectionEndpoint": true,
+          "reproducible": true,
           "maxValueBytes": 1048576
         }
       }
@@ -76,8 +97,9 @@ The extension uses the standard advertisement mechanism: `openinference-projecti
 Payload fields:
 
 - `conventionsVersion` (string, required) — **informational, not independently negotiable**: it echoes the `openinference-semantic-conventions` release bound to the advertised extension `version`, so consumers can filter on conventions compatibility without a version-mapping table. For extension version `0.1.0` it MUST be `"0.1.31"`. Any change to the frozen vocabulary — including adopting a newer conventions release — MUST increment `version`; the two fields move together or not at all. An advertisement pairing `version: "0.1.0"` with any other `conventionsVersion` is invalid.
-- `projectionEndpoint` (boolean, required) — whether the server exposes the [server-side projection endpoint](#optional-server-side-projection-endpoint). `false` declares that projections the deployment publishes through its own pipeline — typically into a shared collector its consumers already read — conform to this extension, without serving them over the AEP surface. With no endpoint there is no artifact to fetch, so the claim is checked via AEP-REQ-OI-013: fetch the Trace, project it locally under the advertised `maxValueBytes`, and compare against the spans found in the collector.
-- `maxValueBytes` (integer, optional) — the truncation limit `L` the server's projections apply to `input.value`/`output.value`, per [Value size and truncation](#value-size-and-truncation). Absent means unbounded.
+- `projectionEndpoint` (boolean, required) — whether the server exposes the [server-side projection endpoint](#optional-server-side-projection-endpoint). `false` declares that projections the deployment publishes through its own pipeline — typically into a shared collector its consumers already read — conform to this extension, without serving them over the AEP surface. With no endpoint there is no artifact to fetch, so the claim is checked by fetching the Trace, projecting it locally under the advertised `maxValueBytes`, and comparing against the spans found in the collector — by digest when the server claims reproducible conformance (AEP-REQ-OI-013), structurally (identifiers, parentage, attributes) when it claims only semantic conformance.
+- `reproducible` (boolean, required) — which [conformance level](#two-conformance-levels) the server claims. `false` claims semantic conformance only; `true` claims reproducible conformance, making AEP-REQ-OI-002, OI-013, and OI-014 binding.
+- `maxValueBytes` (integer, optional) — the truncation limit `L` the server's projections apply, per [Value size and truncation](#value-size-and-truncation). Absent means unbounded.
 
 Until the extension is registered, vendor implementations MUST use a reverse-DNS identifier (e.g. `com.example.openinference-projection`) per AEP-REQ-106.
 
@@ -95,7 +117,9 @@ AGENT  ─ session root span            ← Trace
  └── (span events)                    ← DecisionNode[], TraceError[] without turnIndex
 ```
 
-Sibling spans are emitted in a **total order**: start time, then a fixed kind precedence (`LLM` → `TOOL` → `GUARDRAIL`), then position in the source array. The kind precedence exists because a turn's children come from three different arrays — within each array order is defined, across them it isn't, and a start-time tie between an inferred model span, a recorded tool span, and a policy instant would otherwise leave emission order implementation-defined. Emission order is observable in the OTLP/JSON `spans` array and compared byte-for-byte by AEP-REQ-OI-013, so it cannot be left loose. Span events on a span are likewise emitted in event-time order, ties broken by source precedence (on the root span, decision events before exception events) then array position.
+Sibling spans are emitted in a **total order**: start time, then a fixed kind precedence (`LLM` → `TOOL` → `GUARDRAIL`), then position in the source array. The kind precedence exists because a turn's children come from three different arrays — within each array order is defined, across them it isn't, and a start-time tie between an inferred model span, a recorded tool span, and a policy instant would otherwise leave emission order implementation-defined. Span events on a span are likewise emitted in event-time order, ties broken by source precedence (on the root span, decision events before exception events) then array position.
+
+The total order binds implementations claiming [reproducible conformance](#two-conformance-levels), where it is part of byte-identity. At the semantic level, order is unspecified: a batching OpenTelemetry exporter reorders spans and remains conforming, because span identity and parentage — not array position — carry the semantics.
 
 All projected spans are emitted under a single OTel **InstrumentationScope** with `name` = `aep.openinference-projection` and `version` = this extension's version (`0.1.0`). In OTLP/JSON the scope sits between the resource and the spans; left unpinned, two conforming implementations would produce different documents while both claiming conformance. Pinning it also gives backends a clean filter for "spans that came from an AEP projection". Resource-level attributes remain outside the projection (AEP-REQ-OI-002).
 
@@ -103,13 +127,14 @@ Finer-grained interleaving than timestamps record is not reconstructed — the T
 
 ## The canonical projection object
 
-Determinism needs a comparison target, and serialized OTLP is the wrong one: two SDKs can represent the same logical span set differently — attribute ordering, presence of default-valued fields, `AnyValue` encoding choices, envelope fields like `schemaUrl` or `droppedAttributesCount` — while both emitting valid OTLP. Byte-identity defined over OTLP bytes would make conformance depend on serializer internals this extension does not control.
+[Reproducible conformance](#two-conformance-levels) needs a comparison target, and serialized OTLP is the wrong one: two SDKs can represent the same logical span set differently — attribute ordering, presence of default-valued fields, `AnyValue` encoding choices, envelope fields like `schemaUrl` or `droppedAttributesCount` — while both emitting valid OTLP. Byte-identity defined over OTLP bytes would make conformance depend on serializer internals this extension does not control.
 
-Conformance is therefore defined over a **canonical projection object**, of which OTLP/JSON is one transport encoding:
+Reproducible conformance is therefore defined over a **canonical projection object**, of which OTLP/JSON is one transport encoding (semantic-level implementations never need to construct it):
 
 ```json
 {
-  "aepOpenInferenceProjection": "0.1.0",
+  "aepProjection": "0.1.0",
+  "profile": "openinference/0.1.31",
   "traceId": "<32 lowercase hex>",
   "spans": [
     {
@@ -134,7 +159,10 @@ Rules that make its bytes unique:
 - **Order is the projection's order.** `spans` in the total sibling emission order; `events` in event order; `links` in source order. (A span currently carries at most one link; the rule is stated so a future multi-link model needs no new decision.)
 - **Absent means absent.** No `null` members, no empty arrays or objects, no default-valued fields. A fact the projection did not produce does not appear.
 - **Timestamps are decimal strings** of nanoseconds since epoch — they exceed 2^53, so JSON numbers cannot carry them faithfully — produced by the pinned RFC 3339 conversion in [Timing rules](#timing-rules).
-- **`kind` is the OpenInference kind** and is the sole carrier of it in the object. Attribute values are JSON strings, booleans, or numbers exactly as mapped (numbers only where the Trace schema types the source as integer: token counts, `aep.turn.index`, `aep.error.code`, `aep.redactions.count`).
+- **`kind` is the profile's kind** (here: the OpenInference kind) and is the sole carrier of it in the object. Attribute values are JSON strings, booleans, or numbers exactly as mapped (numbers only where the Trace schema types the source as integer: token counts, `aep.turn.index`, `aep.error.code`, `aep.redactions.count`).
+- **`profile` names the vocabulary binding** (`"openinference/0.1.31"` for this extension revision), mirroring the version binding in [Extension advertisement](#extension-advertisement). The object shape and every rule above are [profile-independent mechanics](#layering-mechanics-and-the-openinference-profile); a sibling profile changes the `profile` member and the vocabulary inside `name`/`kind`/`attributes`, nothing else.
+
+Byte-identity, not semantic equivalence, is the deliberate strength here — and not because any consumer parses member order. What consumers *need* is semantic equivalence; what makes semantic equivalence **checkable** is a canonical form. A weaker requirement would have to enumerate normatively which variations count as equivalent — attribute order, absent-vs-default, timestamp precision — and that enumeration is a canonical form in disguise, plus a matching algorithm every verifier must implement identically. With a canonical form, equivalence is decidable by digest: a conformance suite ships (Trace, expected digest) pairs instead of a reference matcher; a consumer verifies a `projectionEndpoint: false` server's collector-published spans by projecting the fetched Trace and comparing one hash; two independently produced projections of the same Trace deduplicate on identity in any backend rather than double-ingesting as divergent twins. This is the same move core AEP makes for Trace signing (JCS + digest, AEP-REQ-124). For the projection *content*, the marginal cost is near zero — span IDs, attributes, and timestamps must be pinned regardless, since cross-implementation correlation fails without identical IDs — but the canonicalization *engine* is a real implementation cost, which is exactly why reproducibility is an optional conformance level: worth it to the tooling that needs the digest, not imposed on a platform emitting through a stock OpenTelemetry SDK.
 
 Transport note: in OTLP encodings, every projected span's *structural* OTel `SpanKind` is `INTERNAL`; the canonical `kind` travels as the `openinference.span.kind` attribute per OpenInference convention. A transport encoding is conformant only if normalizing it back — hex IDs, `AnyValue` → JSON values, dropping empty/default envelope fields, folding `openinference.span.kind` into `kind` — reproduces the canonical object byte-for-byte under JCS.
 
@@ -277,7 +305,7 @@ Turn inputs/outputs can be large, and OTel backends commonly cap attribute value
 - By default the projection is **unbounded**: values emit whole.
 - A deployment MAY declare a byte limit **L** (advertised as `maxValueBytes` for server-side projections). When declared, every `input.value`/`output.value` whose UTF-8 encoding exceeds L bytes is cut to the longest prefix ≤ L bytes that ends on a UTF-8 code-point boundary, and the span additionally carries `aep.truncation.input = true` (respectively `aep.truncation.output = true`) and `aep.truncation.input_digest` (respectively `aep.truncation.output_digest`) — `sha256:` hex over the full untruncated value bytes. The digest makes the cut detectable and lets two projections be compared for divergence even when only one truncated; it is scoped under `aep.truncation.*` so it cannot be misread as the adjacent `aep.turn.input_digest`, which hashes the Trace's *normalized* input under an algorithm the schema does not pin — the two digests are different facts and will not agree.
 - A value whose untruncated `mime_type` would be `application/json` MUST be emitted with `mime_type = text/plain` when truncation is applied: a prefix of a JSON document is not JSON, and consumers that parse `input.value` on the JSON MIME type (Phoenix and Langfuse both do, to render structured input) would show a parse failure instead of content — making the truncation path degrade worse than not truncating. The `aep.truncation.*` marker tells a consumer why the type changed; a viewer showing a truncated JSON string is strictly better than one showing an error.
-- L is not limited to the input/output pair — the argument above doesn't stop there. But *which* attributes are truncatable is defined **exhaustively, not categorically**: a semantic test like "content-derived" would let two implementations classify borderline fields differently and break AEP-REQ-OI-002. The complete truncatable set, with marker locations, is:
+- L is not limited to the input/output pair — the argument above doesn't stop there. But *which* attributes are truncatable is defined **exhaustively, not categorically**: a semantic test like "content-derived" would let two implementations classify borderline fields differently — divergent truncation behavior at every conformance level, and broken byte-identity (AEP-REQ-OI-002) at the reproducible one. The complete truncatable set, with marker locations, is:
 
   | Truncatable value | Marker + digest location |
   |---|---|
@@ -292,7 +320,7 @@ Turn inputs/outputs can be large, and OTel backends commonly cap attribute value
 
   `aep.truncation.attributes` is a JCS array of the affected attribute names; `aep.truncation.attribute_digests` a JCS object mapping each name to `sha256:` hex over the full value bytes. A cut JCS-carrying attribute is no longer valid JSON; attributes have no MIME field to downgrade, so the marker is the signal.
 - Every mapped attribute **not** in that table is not truncatable, whatever its size — identifiers, digests, enumerated values, names (span names included: they derive from `agentId`/`nodeId`/`model`/`toolName`), MIME types, versions, and provider strings emit whole; cutting an identifier destroys correlation while saving nothing. The truncation metadata itself (`aep.truncation.*`) is likewise exempt and MUST be emitted whole even when it alone would exceed L — a limit small enough to be exceeded by the digests is a deployment misconfiguration, not a license to truncate the record of truncation. Without the table, a deployment that declares L to fit its backend's attribute cap would still emit an unbounded reasoning detail, get it cut by the exporter, and land back in exactly the non-determinism this section exists to prevent.
-- Two conforming projections with the same L produce identical output; the [determinism requirement](#requirements-provisional) is parameterized by L, with unbounded as the default.
+- The truncatable set, the markers, and the MIME downgrade bind at **both conformance levels** — they are semantics a consumer relies on (what may be cut, and how a cut announces itself). The exact UTF-8-boundary cut and the full-value digests bind at the reproducible level, where two projections with the same L must produce identical output; the [determinism requirement](#requirements-provisional) is parameterized by L, with unbounded as the default. Semantic-level implementations SHOULD emit the digests too — they cost one hash and make any cut auditable.
 - Downstream truncation (collector or backend limits) is outside the projection's conformance boundary; deployments SHOULD configure attribute-value limits at or above L so the projected bytes survive intact.
 
 ### Timing rules
@@ -377,7 +405,7 @@ The projection needs no server support — any client holding a Trace can comput
 GET /aep/traces/{traceId}/projections/openinference
 ```
 
-JSON-RPC equivalent: `aep.trace.projectOpenInference`. The response is the span tree in OTLP/JSON form (`ExportTraceServiceRequest`) — a **transport encoding** of the [canonical projection object](#the-canonical-projection-object), which is where conformance is measured: a consumer checking AEP-REQ-OI-013 normalizes the response back to the canonical object and compares JCS bytes, so OTLP serializer differences (member order, default-field presence, `AnyValue` shapes) cannot fail a conforming server. Two transport details are still normative because generic tooling gets them wrong:
+JSON-RPC equivalent: `aep.trace.projectOpenInference`. The response is the span tree in OTLP/JSON form (`ExportTraceServiceRequest`) — a **transport encoding** of the [canonical projection object](#the-canonical-projection-object), which is where reproducible conformance is measured: a consumer checking AEP-REQ-OI-013 against a `reproducible: true` server normalizes the response back to the canonical object and compares JCS bytes, so OTLP serializer differences (member order, default-field presence, `AnyValue` shapes) cannot fail a conforming server. Semantic-level servers are checked structurally instead. Two transport details are still normative because generic tooling gets them wrong:
 
 - **ID encoding.** In OTLP/JSON, `trace_id` and `span_id` MUST be encoded as lowercase hexadecimal strings (32 and 16 characters), per the OTLP specification's explicit override of protobuf's canonical JSON mapping. A generic protobuf-JSON serializer emits base64 for `bytes` fields and produces output that is silently non-interoperable — and non-conforming here.
 - **Sealed only.** The endpoint is defined only for sealed Traces; requesting the projection of an unsealed Trace fails with `-32030` (`invalid_state_transition`).
@@ -386,9 +414,11 @@ Authorization, **mode-based access**, and existence-hiding semantics are identic
 
 ## Requirements (provisional)
 
-**AEP-REQ-OI-001**: A conforming projection MUST be a pure function of a single sealed Trace and the declared truncation limit L (default: unbounded): it MUST NOT read external systems, clocks, or other configuration that varies the output, and MUST NOT be defined for unsealed Traces.
+Requirements are grouped by [conformance level](#two-conformance-levels). Semantic requirements bind every implementation claiming the extension; reproducible requirements bind only implementations advertising `reproducible: true`.
 
-**AEP-REQ-OI-002**: Two conforming projections of the same sealed Trace under the same L MUST produce byte-identical JCS serializations of the [canonical projection object](#the-canonical-projection-object) — one identity covering IDs, parentage, names, kinds, timestamps, status, attributes, events, links, and emission order. A transport encoding (OTLP/JSON or otherwise) is conforming only if it normalizes losslessly back to that object; resource-level attributes, the InstrumentationScope envelope (pinned separately in [The span tree](#the-span-tree)), and OTLP serializer details live in transport, outside the object.
+### Semantic conformance (baseline)
+
+**AEP-REQ-OI-001**: A conforming projection MUST be a pure function of a single sealed Trace and the declared truncation limit L (default: unbounded): it MUST NOT read external systems, clocks, or other configuration that varies the output, and MUST NOT be defined for unsealed Traces.
 
 **AEP-REQ-OI-003**: A conforming projection MUST emit the OpenInference vocabulary exactly as frozen in this document ([Convention pinning](#convention-pinning), `openinference-semantic-conventions` 0.1.31) and MUST NOT substitute names, kinds, or event conventions from any other OpenInference release. Adopting a newer release requires a revision of this extension: the extensionData `version` MUST be incremented and `conventionsVersion` MUST equal the release bound to that version (`"0.1.31"` for `0.1.0`) — the two fields MUST NOT vary independently.
 
@@ -404,13 +434,21 @@ Authorization, **mode-based access**, and existence-hiding semantics are identic
 
 **AEP-REQ-OI-009**: §11.9 `observability` blocks MUST project per the three-branch rule in [Correlation identifiers become links](#correlation-identifiers-become-links): a span link only when `provider` is `"opentelemetry"` and both identifiers are well-formed W3C values; the `aep.observability.*` attribute fallback otherwise. Recorded identifiers MUST NOT become the projected spans' own identities in any branch.
 
-**AEP-REQ-OI-010**: When a truncation limit L is declared, truncation MUST be applied within the projection per [Value size and truncation](#value-size-and-truncation) — UTF-8-boundary prefix cut, markers and full-value digests at the locations given there, and `mime_type` downgraded to `text/plain` for values that would otherwise be `application/json` — and MUST NOT be delegated to exporters or collectors. L applies to exactly the truncatable set enumerated in that section's table; no other attribute may be cut, and the `aep.truncation.*` metadata MUST be emitted whole even when it alone would exceed L.
+**AEP-REQ-OI-010**: When a truncation limit L is declared, truncation MUST be applied within the projection per [Value size and truncation](#value-size-and-truncation) — cutting only values in that section's truncatable table, with markers at the locations given there and `mime_type` downgraded to `text/plain` for values that would otherwise be `application/json` — and MUST NOT be delegated to exporters or collectors. No attribute outside the table may be cut, and the `aep.truncation.*` metadata MUST be emitted whole even when it alone would exceed L. Implementations SHOULD emit the full-value digests at every level; at the reproducible level they are required (AEP-REQ-OI-014).
 
-**AEP-REQ-OI-011**: Servers advertising `openinference-projection` MUST publish the extensionData payload of [Extension advertisement](#extension-advertisement) (`conventionsVersion`, `projectionEndpoint`, and `maxValueBytes` when a limit applies). Servers advertising `projectionEndpoint: true` MUST implement the projection endpoint for sealed Traces with authorization, mode-based access, and existence-hiding semantics identical to Trace retrieval, and MUST reject projection of unsealed Traces with `-32030`.
+**AEP-REQ-OI-011**: Servers advertising `openinference-projection` MUST publish the extensionData payload of [Extension advertisement](#extension-advertisement) (`conventionsVersion`, `projectionEndpoint`, `reproducible`, and `maxValueBytes` when a limit applies). Servers advertising `projectionEndpoint: true` MUST implement the projection endpoint for sealed Traces with authorization, mode-based access, and existence-hiding semantics identical to Trace retrieval, and MUST reject projection of unsealed Traces with `-32030`.
 
-**AEP-REQ-OI-012**: OTLP/JSON responses MUST encode `trace_id` and `span_id` as lowercase hexadecimal strings per the OTLP specification's JSON mapping — base64-encoded IDs (protobuf's default JSON mapping for `bytes`) are non-conforming — and MUST normalize losslessly back to the canonical projection object, with structural `SpanKind` `INTERNAL` and the canonical kind carried as `openinference.span.kind`, under the pinned InstrumentationScope.
+**AEP-REQ-OI-012**: OTLP/JSON responses MUST encode `trace_id` and `span_id` as lowercase hexadecimal strings per the OTLP specification's JSON mapping — base64-encoded IDs (protobuf's default JSON mapping for `bytes`) are non-conforming — with structural `SpanKind` `INTERNAL`, the profile kind carried as `openinference.span.kind`, and the pinned InstrumentationScope.
 
-**AEP-REQ-OI-013**: A server-side projection MUST equal the projection a conforming client would compute from the fetched Trace under the same L, compared as canonical projection objects after normalizing the transport encoding (AEP-REQ-OI-002 applies across the client/server boundary). A client reproducing a server's projection MUST take L from the server's `maxValueBytes` advertisement (absent → unbounded); computing under the unbounded default against a server that declares a limit fails this requirement by construction.
+### Reproducible conformance (optional, advertised with `reproducible: true`)
+
+Requirement numbers are stable, not contiguous: AEP-REQ-OI-002 and OI-013 were introduced at earlier revisions as universal requirements and keep their identifiers now that they bind only at this level.
+
+**AEP-REQ-OI-002**: Two reproducible projections of the same sealed Trace under the same L MUST produce byte-identical JCS serializations of the [canonical projection object](#the-canonical-projection-object) — one identity covering IDs, parentage, names, kinds, timestamps, status, attributes, events, links, and the total emission order of [The span tree](#the-span-tree). A transport encoding (OTLP/JSON or otherwise) is conforming at this level only if it normalizes losslessly back to that object; resource-level attributes, the InstrumentationScope envelope, and OTLP serializer details live in transport, outside the object.
+
+**AEP-REQ-OI-013**: A reproducible server-side projection MUST equal the projection a conforming reproducible client would compute from the fetched Trace under the same L, compared as canonical projection objects after normalizing the transport encoding (AEP-REQ-OI-002 applies across the client/server boundary). A client reproducing a server's projection MUST take L from the server's `maxValueBytes` advertisement (absent → unbounded); computing under the unbounded default against a server that declares a limit fails this requirement by construction.
+
+**AEP-REQ-OI-014**: Reproducible truncation MUST apply the exact UTF-8-boundary prefix cut and MUST emit the full-value `sha256:` digests at the locations given in [Value size and truncation](#value-size-and-truncation), so that equal L yields byte-equal canonical objects.
 
 ## Core hooks needed in the spec
 
@@ -483,23 +521,27 @@ Note the inferred LLM span (12:00:00.000 → 12:00:01.800) overlaps the recorded
 
 ## Conformance summary
 
-An implementation producing projections (client- or server-side):
+Every implementation claiming the extension (**semantic conformance**, achievable with a stock OpenTelemetry SDK):
 
 1. MUST project only sealed Traces, as a pure function of the Trace and the declared truncation limit (AEP-REQ-OI-001).
-2. MUST produce byte-identical canonical projection objects (JCS) for the same Trace and limit, across implementations and across the client/server boundary, with transport encodings normalizing losslessly back to the object (AEP-REQ-OI-002, AEP-REQ-OI-013).
-3. MUST emit the OpenInference vocabulary frozen at `openinference-semantic-conventions` 0.1.31, upgrading only via extension revision (AEP-REQ-OI-003).
-4. MUST derive the trace ID from the Trace's `traceId` and span IDs from array positions, per the derivation table, never generating or reusing external IDs (AEP-REQ-OI-004).
-5. MUST keep span kinds fixed per the mapping tables (AEP-REQ-OI-005).
-6. MUST NOT synthesize content or inferred facts — digest-only stays digest-only, and `llm.provider` is never derived from the model string (AEP-REQ-OI-006).
-7. MUST propagate sensitivity labels and redaction markers, matching redaction paths only when RFC 6901-parseable, and MUST NOT project `injectedContext`, `stateSnapshot`, or `seed` (AEP-REQ-OI-007).
-8. MUST follow the timing rules and flag every inferred start/end with `aep.timing.inferred` (AEP-REQ-OI-008).
-9. MUST project §11.9 correlation blocks as links only when well-formed OpenTelemetry identifiers are present, falling back to attributes otherwise (AEP-REQ-OI-009).
-10. MUST apply truncation inside the projection, to exactly the enumerated truncatable set, with markers and full-value digests, never delegating it to exporters (AEP-REQ-OI-010).
+2. MUST emit the OpenInference vocabulary frozen at `openinference-semantic-conventions` 0.1.31, upgrading only via extension revision (AEP-REQ-OI-003).
+3. MUST derive the trace ID from the Trace's `traceId` and span IDs from array positions, per the derivation table, never generating or reusing external IDs (AEP-REQ-OI-004).
+4. MUST keep span kinds fixed per the mapping tables (AEP-REQ-OI-005).
+5. MUST NOT synthesize content or inferred facts — digest-only stays digest-only, and `llm.provider` is never derived from the model string (AEP-REQ-OI-006).
+6. MUST propagate sensitivity labels and redaction markers, matching redaction paths only when RFC 6901-parseable, and MUST NOT project `injectedContext`, `stateSnapshot`, or `seed` (AEP-REQ-OI-007).
+7. MUST follow the timing rules and flag every inferred start/end with `aep.timing.inferred` (AEP-REQ-OI-008).
+8. MUST project §11.9 correlation blocks as links only when well-formed OpenTelemetry identifiers are present, falling back to attributes otherwise (AEP-REQ-OI-009).
+9. MUST apply truncation inside the projection, cutting only the enumerated truncatable set, with markers, never delegating it to exporters (AEP-REQ-OI-010).
+
+An implementation advertising **reproducible conformance** (`reproducible: true`) additionally:
+
+10. MUST produce byte-identical canonical projection objects (JCS, total emission order) for the same Trace and limit, across implementations and across the client/server boundary, with transport encodings normalizing losslessly back to the object (AEP-REQ-OI-002, AEP-REQ-OI-013).
+11. MUST apply the exact truncation cut with full-value digests so equal limits yield byte-equal objects (AEP-REQ-OI-014).
 
 A server advertising the extension additionally:
 
-11. MUST publish `conventionsVersion` and `projectionEndpoint` (and `maxValueBytes` when limited) in `capabilities.extensionData` per §5.1, with `conventionsVersion` bound to the extension `version` — never independently varied (AEP-REQ-OI-003, AEP-REQ-OI-011).
-12. MUST, when `projectionEndpoint: true`, serve sealed-Trace projections with authorization, mode-based access, and existence-hiding identical to Trace retrieval, rejecting unsealed Traces with `-32030` (AEP-REQ-OI-011) and encoding OTLP/JSON IDs as lowercase hex (AEP-REQ-OI-012).
+12. MUST publish `conventionsVersion`, `projectionEndpoint`, and `reproducible` (and `maxValueBytes` when limited) in `capabilities.extensionData` per §5.1, with `conventionsVersion` bound to the extension `version` — never independently varied (AEP-REQ-OI-003, AEP-REQ-OI-011).
+13. MUST, when `projectionEndpoint: true`, serve sealed-Trace projections with authorization, mode-based access, and existence-hiding identical to Trace retrieval, rejecting unsealed Traces with `-32030` (AEP-REQ-OI-011) and encoding OTLP/JSON IDs as lowercase hex (AEP-REQ-OI-012).
 
 ## Non-goals
 
@@ -514,3 +556,4 @@ A server advertising the extension additionally:
 1. **Composite-session graph conventions.** The mapping emits `graph.node.id` on composite-session turn spans, following OpenInference's agent-graph conventions as frozen at the pinned release. Those conventions are newer than the core span-kind vocabulary; if they shift upstream, the CSE-specific rows are the ones most likely to need attention in the next convention-revision cycle. Pinning contains the blast radius but doesn't remove it.
 2. **Reasoning as events vs. spans.** Reasoning steps project as span events because they carry no duration. Implementations with rich, long-running reasoning phases may prefer spans; that would require optional start/end timestamps on `ReasoningStep` (an additive core hook this proposal does not yet request).
 3. **Conventions-version pinning granularity.** This revision pins a whole `openinference-semantic-conventions` release. If upstream begins versioning its spec text independently of the package, or if per-namespace stability markers appear, pinning could become finer-grained than release-level. Until then, release-level is the only anchor upstream offers.
+4. **Hoisting the mechanics.** The [profile-independent mechanics](#layering-mechanics-and-the-openinference-profile) — canonical object, ID derivation, timing, truncation, redaction propagation, conformance levels — are defined in this document but belong to no convention set. When a second projection profile materializes (OTel GenAI semantic conventions being the likely candidate), they should be hoisted into a shared companion document or core section that profiles reference. Hoisting is deliberately editorial rather than breaking: the seam is already drawn, and this profile would shrink to its vocabulary binding and pinned release.
