@@ -2,7 +2,7 @@
 
 *A normative mapping from the AEP Trace to an OpenInference span tree, so every conforming Trace can land in Phoenix, Langfuse, Arize, or any OTLP backend without hand-written glue.*
 
-**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 3
+**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 4
 
 ---
 
@@ -85,7 +85,7 @@ Until the extension is registered, vendor implementations MUST use a reverse-DNS
 
 ```
 AGENT  ─ session root span            ← Trace
- ├── CHAIN  ─ turn 0                  ← TraceTurn (AGENT + graph.node.id for composite sessions)
+ ├── CHAIN  ─ turn 0                  ← TraceTurn (AGENT + graph.node.id when the turn carries nodeId)
  │    ├── LLM       ─ model call      ← ModelCallRecord
  │    ├── TOOL      ─ tool call       ← ToolCallEvent
  │    ├── GUARDRAIL ─ policy event    ← PolicyEvent
@@ -95,7 +95,11 @@ AGENT  ─ session root span            ← Trace
  └── (span events)                    ← DecisionNode[], TraceError[] without turnIndex
 ```
 
-Children are emitted in `startedAt` order (ties broken by array order in the Trace). Finer-grained interleaving than timestamps record is not reconstructed — the Trace is the limit of fidelity.
+Sibling spans are emitted in a **total order**: start time, then a fixed kind precedence (`LLM` → `TOOL` → `GUARDRAIL`), then position in the source array. The kind precedence exists because a turn's children come from three different arrays — within each array order is defined, across them it isn't, and a start-time tie between an inferred model span, a recorded tool span, and a policy instant would otherwise leave emission order implementation-defined. Emission order is observable in the OTLP/JSON `spans` array and compared byte-for-byte by AEP-REQ-OI-013, so it cannot be left loose. Span events on a span are likewise emitted in event-time order, ties broken by source precedence (on the root span, decision events before exception events) then array position.
+
+All projected spans are emitted under a single OTel **InstrumentationScope** with `name` = `aep.openinference-projection` and `version` = this extension's version (`0.1.0`). In OTLP/JSON the scope sits between the resource and the spans; left unpinned, two conforming implementations would produce different documents while both claiming conformance. Pinning it also gives backends a clean filter for "spans that came from an AEP projection". Resource-level attributes remain outside the projection (AEP-REQ-OI-002).
+
+Finer-grained interleaving than timestamps record is not reconstructed — the Trace is the limit of fidelity.
 
 ## Mapping
 
@@ -106,8 +110,8 @@ All attribute names below are OpenInference semantic conventions (frozen per [Co
 | OpenInference / OTel | AEP source |
 |---|---|
 | span kind | `AGENT` |
-| span name | `agentId`, or `"aep.session"` for composite sessions (no top-level `agentId`) |
-| start / end | `startedAt` / `completedAt` (fallback: `completedAt` of last turn; else `startedAt`) |
+| span name | `agentId` when present; `"aep.session"` when the Trace carries no top-level `agentId` |
+| start / end | `startedAt` / `completedAt` (fallback: greatest `completedAt` across turns; else `startedAt`) |
 | `session.id` | `sessionId` |
 | status | `OK` when `finalOutcome.status` = `completed`; `ERROR` otherwise |
 | `aep.trace_id` | `traceId` |
@@ -130,17 +134,19 @@ Trace-level `decisionPath` nodes and `errors` entries carrying no `turnIndex` be
 
 | OpenInference / OTel | AEP source |
 |---|---|
-| span kind | `CHAIN` for single-agent sessions; `AGENT` for composite-session turns |
-| span name | `"turn <turnIndex>"`; for composite turns, `nodeId` |
+| span kind | `CHAIN` when the turn carries no `nodeId`; `AGENT` when it does |
+| span name | `"turn <turnIndex>"` when the turn carries no `nodeId`; `nodeId` when it does |
 | parent | root span |
 | start / end | `startedAt` / `completedAt` |
 | `input.value` / `input.mime_type` | `input` — see [Content and MIME rules](#content-and-mime-rules) |
 | `output.value` / `output.mime_type` | `output` — same rules |
-| `graph.node.id` | `nodeId` (composite sessions; OpenInference graph conventions) |
+| `graph.node.id` | `nodeId` (when present; OpenInference graph conventions) |
 | `aep.turn.index` | `turnIndex` |
 | `aep.turn.id` | `turnId` (when present) |
 | `aep.turn.input_digest` / `aep.turn.output_digest` | `inputDigest` / `outputDigest` |
 | `aep.sensitivity.input.level` / `aep.sensitivity.output.level` | `inputSensitivity.level` / `outputSensitivity.level` (when present) |
+
+The projection deliberately avoids "composite session" as a test of its own. The schema makes top-level `agentId` *optional* for composite sessions (§11.7), not absent — a composite session may legitimately carry one — so keying turn-span rules off the root's shape would make the tree depend on which detection an implementer picked. Each rule instead keys on a single schema fact: turn kind, name, and `graph.node.id` on the presence of `nodeId` on that turn (AEP-REQ-111 makes it required for every composite-session turn); the root name on the presence of top-level `agentId`.
 
 ### ModelCallRecord → LLM span
 
@@ -203,13 +209,13 @@ PolicyEvents, like reasoning steps below, carry a single timestamp and no durati
 Reasoning steps carry a single `timestamp` and no duration, so they project as OTel span events rather than spans:
 
 - event name: `aep.reasoning`
-- event time: `timestamp` (fallback: turn `startedAt`)
+- event time: `timestamp` (fallback: turn `startedAt`, in which case the event carries `aep.timing.inferred = true` as an **event** attribute — the span-level flag cannot speak for its events)
 - attributes: `aep.reasoning.step_id`, `aep.reasoning.type`, `aep.reasoning.summary` (when present), `aep.reasoning.detail` (when present — governed by the traceability contract's reasoning level, which the Trace has already applied)
 
 ### DecisionNode → span event on the root span
 
 - event name: `aep.decision`
-- event time: `timestamp` (fallback: root span start)
+- event time: `timestamp` (fallback: root span start, with `aep.timing.inferred = true` as an event attribute)
 - attributes: `aep.decision.node_id`, `aep.decision.type`, `aep.decision.rationale` (when present), `aep.decision.alternatives` (JCS JSON string, when present)
 
 ### TraceError → exception span event
@@ -234,6 +240,7 @@ Turn inputs/outputs can be large, and OTel backends commonly cap attribute value
 - By default the projection is **unbounded**: values emit whole.
 - A deployment MAY declare a byte limit **L** (advertised as `maxValueBytes` for server-side projections). When declared, every `input.value`/`output.value` whose UTF-8 encoding exceeds L bytes is cut to the longest prefix ≤ L bytes that ends on a UTF-8 code-point boundary, and the span additionally carries `aep.truncation.input = true` (respectively `aep.truncation.output = true`) and `aep.truncation.input_digest` (respectively `aep.truncation.output_digest`) — `sha256:` hex over the full untruncated value bytes. The digest makes the cut detectable and lets two projections be compared for divergence even when only one truncated; it is scoped under `aep.truncation.*` so it cannot be misread as the adjacent `aep.turn.input_digest`, which hashes the Trace's *normalized* input under an algorithm the schema does not pin — the two digests are different facts and will not agree.
 - A value whose untruncated `mime_type` would be `application/json` MUST be emitted with `mime_type = text/plain` when truncation is applied: a prefix of a JSON document is not JSON, and consumers that parse `input.value` on the JSON MIME type (Phoenix and Langfuse both do, to render structured input) would show a parse failure instead of content — making the truncation path degrade worse than not truncating. The `aep.truncation.*` marker tells a consumer why the type changed; a viewer showing a truncated JSON string is strictly better than one showing an error.
+- L is not limited to the input/output pair — the argument above doesn't stop there. Every other **string-valued span or event attribute whose value derives from Trace content** is cut by the same UTF-8-boundary rule: `aep.reasoning.detail` (which the schema designs to be large), `llm.invocation_parameters`, `aep.decision.alternatives`, `aep.replay.nondeterministic_points`, and the like. The carrying span or event then lists the affected attribute names in `aep.truncation.attributes` (JCS array) with full-value digests in `aep.truncation.attribute_digests` (JCS object, name → `sha256:` hex). A cut JCS-carrying attribute is no longer valid JSON; attributes have no MIME field to downgrade, so the marker is the signal. **Exempt** are identifiers, digests, enumerated values, and names (`aep.*.id`, `aep.*_digest`, `session.id`, `llm.model_name`, span names): they are small and schema-bounded, and cutting an identifier destroys correlation while saving nothing. Without this rule, a deployment that declares L to fit its backend's attribute cap would still emit an unbounded reasoning detail, get it cut by the exporter, and land back in exactly the non-determinism this section exists to prevent.
 - Two conforming projections with the same L produce identical output; the [determinism requirement](#requirements-provisional) is parameterized by L, with unbounded as the default.
 - Downstream truncation (collector or backend limits) is outside the projection's conformance boundary; deployments SHOULD configure attribute-value limits at or above L so the projected bytes survive intact.
 
@@ -242,11 +249,12 @@ Turn inputs/outputs can be large, and OTel backends commonly cap attribute value
 OTel spans require start and end timestamps; the projection never invents timing the Trace doesn't support without saying so. Any span with an inferred start **or** end carries `aep.timing.inferred = true`.
 
 - Elements with recorded `startedAt`/`completedAt` use them directly (RFC 3339 → epoch nanoseconds). Nothing inferred.
-- **Root span**: start = `startedAt` (recorded, required by the schema). End = `completedAt` when present (recorded); else the last turn's `completedAt`; else `startedAt` (zero duration) — both fallbacks flag the root span inferred. `sealedAt`, though guaranteed present on sealed Traces, is deliberately not used: it bounds the session from above but includes post-completion sealing latency, and the last turn's end is the better estimate.
+- **Root span**: start = `startedAt` (recorded, required by the schema). End = `completedAt` when present (recorded); else the **greatest** `completedAt` across turns — turns are not required to be in chronological order, so "array-last" is not necessarily latest; else `startedAt` (zero duration). Both fallbacks flag the root span inferred. `sealedAt`, though guaranteed present on sealed Traces, is deliberately not used: it bounds the session from above but includes post-completion sealing latency, and the latest turn end is the better estimate.
 - **ToolCallEvent** without `completedAt`: end = `startedAt + latencyMs` when `latencyMs` is present, else a zero-duration span at `startedAt`. Inferred either way.
-- **ModelCallRecord** carries no timestamps in the v0.1 schema. Model-call spans within a turn are laid **end-to-end in array order**: the first starts at the turn's `startedAt`; each subsequent span starts where the previous one ends; each spans its own `latencyMs` (absent → zero duration). All are flagged inferred. End-to-end placement is chosen over starting every span at the turn's `startedAt` because overlapping spans render as parallel fan-out in Phoenix/Langfuse — a false claim about the agent's behavior in the exact tools this extension serves — while sequential placement matches the common sequential-call case and is equally deterministic. See [Core hooks](#core-hooks-needed-in-the-spec) for the additive fix that removes the inference entirely.
+- **ModelCallRecord** carries no timestamps in the v0.1 schema. Model-call spans within a turn are laid **end-to-end in array order**: the first starts at the turn's `startedAt`; each subsequent span starts where the previous one ends; each spans its own `latencyMs` (absent → zero duration). All are flagged inferred. End-to-end placement is chosen over starting every span at the turn's `startedAt` because overlapping spans render as parallel fan-out in Phoenix/Langfuse — a false claim about the agent's behavior in the exact tools this extension serves — while sequential placement matches the common sequential-call case and is equally deterministic. Placement is then **clamped to the parent**: no model-call span's start or end may exceed the turn's `completedAt`, so a latency sum that overruns the turn (retry or queue time inside `latencyMs`, or genuinely concurrent calls) degenerates into spans capped — in the limit, zero-duration — at the turn's end rather than escaping the parent's bar, which Phoenix and Langfuse render as broken rather than approximate. Clamping against the parent is unlike clamping against recorded siblings (declined below): parent containment is a structural invariant of the tree, not an inference about ordering. See [Core hooks](#core-hooks-needed-in-the-spec) for the additive fix that removes the inference entirely.
+- **PolicyEvent** spans are zero-duration at a recorded `timestamp`: the instant is recorded, and zero duration is the mapping's representation of an instant, not an inference — `aep.timing.inferred` does not apply.
 
-Sequential placement orders model-call spans against *each other*; it cannot place them correctly against recorded sibling spans. An inferred model-call span can therefore still overlap a tool-call span with real timestamps — the [worked example](#worked-example) shows exactly this — and a viewer will render apparent concurrency between a model call and the tool call it likely caused. The projection deliberately does not clamp inferred spans against recorded ones (that would stack a second inference on the first, and mis-render the genuinely-concurrent case): `aep.timing.inferred = true` is the signal that placement, not the Trace, produced the apparent overlap. The `ModelCallRecord` timestamp core hook removes the entire problem.
+Sequential placement orders model-call spans against *each other*; it cannot place them correctly against recorded sibling spans. An inferred model-call span can therefore still overlap a tool-call span with real timestamps — the [worked example](#worked-example) shows exactly this — and a viewer will render apparent concurrency between a model call and the tool call it likely caused. The projection deliberately does not clamp inferred spans against recorded **siblings** (that would stack a second inference on the first, and mis-render the genuinely-concurrent case) — unlike the parent clamp above, which enforces a structural invariant: `aep.timing.inferred = true` is the signal that placement, not the Trace, produced the apparent overlap. The `ModelCallRecord` timestamp core hook removes the entire problem.
 
 ### ID derivation
 
@@ -321,7 +329,7 @@ Authorization, **mode-based access**, and existence-hiding semantics are identic
 
 **AEP-REQ-OI-001**: A conforming projection MUST be a pure function of a single sealed Trace and the declared truncation limit L (default: unbounded): it MUST NOT read external systems, clocks, or other configuration that varies the output, and MUST NOT be defined for unsealed Traces.
 
-**AEP-REQ-OI-002**: Two conforming projections of the same sealed Trace under the same L MUST produce identical span trees — identical span/trace IDs, parentage, names, kinds, timestamps, attributes, events, and links. (Resource-level attributes added by an exporter, e.g. `service.name`, are outside the projection and exempt.)
+**AEP-REQ-OI-002**: Two conforming projections of the same sealed Trace under the same L MUST produce identical span trees — identical span/trace IDs, parentage, names, kinds, timestamps, attributes, events, links, sibling and event emission order per the total order of [The span tree](#the-span-tree), and the pinned InstrumentationScope. (Resource-level attributes added by an exporter, e.g. `service.name`, are outside the projection and exempt.)
 
 **AEP-REQ-OI-003**: A conforming projection MUST emit the OpenInference vocabulary exactly as frozen in this document ([Convention pinning](#convention-pinning), `openinference-semantic-conventions` 0.1.31) and MUST NOT substitute names, kinds, or event conventions from any other OpenInference release. Adopting a newer release requires a revision of this extension and a changed `conventionsVersion` advertisement.
 
@@ -333,11 +341,11 @@ Authorization, **mode-based access**, and existence-hiding semantics are identic
 
 **AEP-REQ-OI-007**: Sensitivity labels present in the Trace MUST project into the corresponding `aep.sensitivity.*` attributes. When the Trace carries `redactions[]`, the root span MUST carry `aep.redactions.count`; `aep.redacted = true` MUST be set on exactly the **non-root** spans matched by RFC 6901-parseable redaction paths under the whole-segment-prefix rule ([Redaction and sensitivity](#redaction-and-sensitivity)) — the root span is excluded from matching — and implementations MUST NOT apply heuristic matching to unparseable paths. `injectedContext`, `stateSnapshot`, and `seed` MUST NOT be projected.
 
-**AEP-REQ-OI-008**: Timestamps MUST follow the [Timing rules](#timing-rules), including `latencyMs`-based end inference for tool calls and end-to-end sequential placement for model-call spans; any span whose start or end is inferred rather than recorded MUST carry `aep.timing.inferred = true`.
+**AEP-REQ-OI-008**: Timestamps MUST follow the [Timing rules](#timing-rules), including the root-span fallback chain, `latencyMs`-based end inference for tool calls, and end-to-end sequential placement for model-call spans clamped to the enclosing turn's `completedAt`. Any span whose start or end is inferred rather than recorded MUST carry `aep.timing.inferred = true`; a span event whose time falls back MUST carry the same flag as an event attribute; zero-duration PolicyEvent spans at a recorded `timestamp` are recorded, not inferred.
 
 **AEP-REQ-OI-009**: §11.9 `observability` blocks MUST project per the three-branch rule in [Correlation identifiers become links](#correlation-identifiers-become-links): a span link only when `provider` is `"opentelemetry"` and both identifiers are well-formed W3C values; the `aep.observability.*` attribute fallback otherwise. Recorded identifiers MUST NOT become the projected spans' own identities in any branch.
 
-**AEP-REQ-OI-010**: When a truncation limit L is declared, truncation MUST be applied within the projection per [Value size and truncation](#value-size-and-truncation) — UTF-8-boundary prefix cut, `aep.truncation.input`/`aep.truncation.output` marker, full-value digest, and `mime_type` downgraded to `text/plain` for values that would otherwise be `application/json` — and MUST NOT be delegated to exporters or collectors.
+**AEP-REQ-OI-010**: When a truncation limit L is declared, truncation MUST be applied within the projection per [Value size and truncation](#value-size-and-truncation) — UTF-8-boundary prefix cut, `aep.truncation.input`/`aep.truncation.output` marker, full-value digest, and `mime_type` downgraded to `text/plain` for values that would otherwise be `application/json` — and MUST NOT be delegated to exporters or collectors. L applies to every content-derived string attribute (markers in `aep.truncation.attributes`, digests in `aep.truncation.attribute_digests`), with identifiers, digests, enumerated values, and names exempt.
 
 **AEP-REQ-OI-011**: Servers advertising `openinference-projection` MUST publish the extensionData payload of [Extension advertisement](#extension-advertisement) (`conventionsVersion`, `projectionEndpoint`, and `maxValueBytes` when a limit applies). Servers advertising `projectionEndpoint: true` MUST implement the projection endpoint for sealed Traces with authorization, mode-based access, and existence-hiding semantics identical to Trace retrieval, and MUST reject projection of unsealed Traces with `-32030`.
 
@@ -421,7 +429,7 @@ An implementation producing projections (client- or server-side):
 1. MUST project only sealed Traces, as a pure function of the Trace and the declared truncation limit (AEP-REQ-OI-001).
 2. MUST produce byte-identical span trees for the same Trace and limit, across implementations and across the client/server boundary (AEP-REQ-OI-002, AEP-REQ-OI-013).
 3. MUST emit the OpenInference vocabulary frozen at `openinference-semantic-conventions` 0.1.31, upgrading only via extension revision (AEP-REQ-OI-003).
-4. MUST derive trace/span IDs from array positions per the derivation table, never generating or reusing external IDs (AEP-REQ-OI-004).
+4. MUST derive the trace ID from the Trace's `traceId` and span IDs from array positions, per the derivation table, never generating or reusing external IDs (AEP-REQ-OI-004).
 5. MUST keep span kinds fixed per the mapping tables (AEP-REQ-OI-005).
 6. MUST NOT synthesize content or inferred facts — digest-only stays digest-only, and `llm.provider` is never derived from the model string (AEP-REQ-OI-006).
 7. MUST propagate sensitivity labels and redaction markers, matching redaction paths only when RFC 6901-parseable, and MUST NOT project `injectedContext`, `stateSnapshot`, or `seed` (AEP-REQ-OI-007).
