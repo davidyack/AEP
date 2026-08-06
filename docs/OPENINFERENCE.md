@@ -2,7 +2,7 @@
 
 *A normative mapping from the AEP Trace to an OpenInference span tree, so every conforming Trace can land in Phoenix, Langfuse, Arize, or any OTLP backend without hand-written glue.*
 
-**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 1
+**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 2
 
 ---
 
@@ -31,7 +31,7 @@ The two extensions are complementary and independent:
 - **§11.9** correlates the AEP Trace with spans *someone else* collected (the deployment's own APM instrumentation).
 - **This extension** projects the AEP Trace *itself* into span form.
 
-When both are present, the recorded §11.9 identifiers become OpenTelemetry **span links** on the projected spans (see [Correlation identifiers become links](#correlation-identifiers-become-links)) — the projected tree points at the externally-collected tree without pretending to be it.
+When both are present, well-formed §11.9 OpenTelemetry identifiers become OpenTelemetry **span links** on the projected spans (see [Correlation identifiers become links](#correlation-identifiers-become-links)) — the projected tree points at the externally-collected tree without pretending to be it.
 
 ### Relationship to Operation Context Resolution
 
@@ -41,9 +41,45 @@ None required. [`OPERATION-CONTEXT.md`](./OPERATION-CONTEXT.md) flows context *i
 
 1. **Pure function.** The projection is computed from the sealed Trace and nothing else. No network access, no clock reads, no randomness.
 2. **Deterministic to the byte.** Same sealed Trace in, same span tree out — including trace/span IDs, which are derived by hashing stable Trace coordinates rather than generated.
-3. **Never synthesize.** If the Trace doesn't carry content (a digest-only model call under a restrictive traceability contract, a redacted field), the projection doesn't invent it. Absence in the Trace is absence in the projection.
-4. **Lossless where OpenInference has no home.** AEP fields with no OpenInference equivalent ride along under an `aep.*` attribute namespace rather than being dropped.
+3. **Never synthesize.** If the Trace doesn't carry content (a digest-only model call under a restrictive traceability contract, a redacted field), the projection doesn't invent it. Absence in the Trace is absence in the projection. The same rule covers derived facts: the projection never infers what the Trace doesn't state (e.g. no parsing a model string into a provider).
+4. **Lossless for evaluation-relevant fields.** Trace fields with no OpenInference equivalent ride along under an `aep.*` attribute namespace rather than being dropped. Fields the projection deliberately does not carry are enumerated in [Fields deliberately not projected](#fields-deliberately-not-projected) with reasons — nothing is dropped silently.
 5. **Sensitivity travels with the data.** Sensitivity labels and redaction records project into attributes so downstream routing can honor them.
+
+## Convention pinning
+
+OpenInference semantic conventions version independently of AEP. A determinism guarantee defined "by reference to OpenInference" would drift: two implementations pinned to different upstream revisions could both claim conformance while emitting different attribute names.
+
+This revision therefore **freezes** its OpenInference vocabulary: the attribute names, span kinds, and event conventions written in this document are normative copies taken from OpenInference semantic conventions as published in `openinference-semantic-conventions` release **0.1.31** (the upstream package is the versioning anchor; OpenInference does not version its spec text separately). An upstream change after that release does not change this mapping. Adopting a newer conventions release is a **revision of this extension**, reflected in the `conventionsVersion` advertisement field below — never a silent re-mapping.
+
+## Extension advertisement
+
+The extension uses the standard advertisement mechanism: `openinference-projection` appears in `capabilities.extensions`, with structured metadata in `capabilities.extensionData` per spec §5.1 (AEP-REQ-134 through AEP-REQ-140).
+
+```json
+{
+  "capabilities": {
+    "extensions": ["openinference-projection"],
+    "extensionData": {
+      "openinference-projection": {
+        "version": "0.1.0",
+        "payload": {
+          "conventionsVersion": "0.1.31",
+          "projectionEndpoint": true,
+          "maxValueBytes": 1048576
+        }
+      }
+    }
+  }
+}
+```
+
+Payload fields:
+
+- `conventionsVersion` (string, required) — the `openinference-semantic-conventions` release whose vocabulary the server's projection emits. For this extension revision the value is `"0.1.31"`; a different value signals a different extension revision, not a configuration choice.
+- `projectionEndpoint` (boolean, required) — whether the server exposes the [server-side projection endpoint](#optional-server-side-projection-endpoint). `false` declares that the server conforms to the projection semantics (e.g. for projections it publishes to a collector itself) without serving them over the AEP surface.
+- `maxValueBytes` (integer, optional) — the truncation limit `L` the server's projections apply to `input.value`/`output.value`, per [Value size and truncation](#value-size-and-truncation). Absent means unbounded.
+
+Until the extension is registered, vendor implementations MUST use a reverse-DNS identifier (e.g. `com.example.openinference-projection`) per AEP-REQ-106.
 
 ## The span tree
 
@@ -63,7 +99,7 @@ Children are emitted in `startedAt` order (ties broken by array order in the Tra
 
 ## Mapping
 
-All attribute names below are OpenInference semantic conventions unless prefixed `aep.`. Complex values (objects, arrays) are serialized to JSON strings using JCS canonical form (RFC 8785) — the same canonicalization the spec already uses for Trace signing (AEP-REQ-124) — so attribute bytes are deterministic.
+All attribute names below are OpenInference semantic conventions (frozen per [Convention pinning](#convention-pinning)) unless prefixed `aep.`. Complex values (objects, arrays) are serialized to JSON strings using JCS canonical form (RFC 8785) — the same canonicalization the spec already uses for Trace signing (AEP-REQ-124) — so attribute bytes are deterministic.
 
 ### Trace → root span
 
@@ -80,11 +116,15 @@ All attribute names below are OpenInference semantic conventions unless prefixed
 | `aep.agent_id` / `aep.agent_version` | `agentId` / `agentVersion` (when present) |
 | `aep.final_outcome.status` | `finalOutcome.status` |
 | `aep.final_outcome.summary` | `finalOutcome.summary` (when present) |
-| `aep.sealed` | `sealed` |
+| `aep.final_outcome.error_ref` | `finalOutcome.errorRef` (when present) — the route from a red root span to its terminal cause |
 | `aep.canonical_digest` | `canonicalDigest` (when present) — lets a backend viewer verify which sealed artifact a span tree came from |
+| `aep.replay.replayable` | `replay.replayable` (when present) |
+| `aep.replay.completeness` | `replay.completeness` (when present) — "can I replay this trace" is answerable from the span viewer |
+| `aep.replay.nondeterministic_points` | `replay.nondeterministicPoints` as JCS JSON string (when present and non-empty) |
+| `aep.redactions.count` | number of `redactions[]` records (when `redactions` present) |
 | `aep.sensitivity.level` / `aep.sensitivity.tags` | `sensitivity` (when present) |
 
-Trace-level `decisionPath` nodes and `errors` entries carrying no `turnIndex` become span events on the root span (below). `injectedContext` is **not** projected — it is replay material, not telemetry, and routinely the most sensitive content in the Trace.
+Trace-level `decisionPath` nodes and `errors` entries carrying no `turnIndex` become span events on the root span (below).
 
 ### TraceTurn → turn span
 
@@ -102,8 +142,6 @@ Trace-level `decisionPath` nodes and `errors` entries carrying no `turnIndex` be
 | `aep.turn.input_digest` / `aep.turn.output_digest` | `inputDigest` / `outputDigest` |
 | `aep.sensitivity.input.level` / `aep.sensitivity.output.level` | `inputSensitivity.level` / `outputSensitivity.level` (when present) |
 
-`latencyMs` is not projected as an attribute; it is redundant with span duration.
-
 ### ModelCallRecord → LLM span
 
 | OpenInference / OTel | AEP source |
@@ -112,7 +150,7 @@ Trace-level `decisionPath` nodes and `errors` entries carrying no `turnIndex` be
 | span name | `model` |
 | parent | enclosing turn span |
 | start / end | see [Timing rules](#timing-rules) |
-| `llm.model_name` | `model` |
+| `llm.model_name` | `model`, verbatim |
 | `llm.invocation_parameters` | `parameters` as JCS JSON string (when present) |
 | `input.value` / `input.mime_type` | `prompt` / `text/plain` — **only when `prompt` is present** (traceability contract `modelCalls: "full"`) |
 | `output.value` / `output.mime_type` | `response` / `text/plain` — only when present |
@@ -124,6 +162,8 @@ Trace-level `decisionPath` nodes and `errors` entries carrying no `turnIndex` be
 
 When the traceability contract exposes only digests, the LLM span still exists — with timing, model name, and token counts — carrying digests instead of content. The projection MUST NOT fabricate `input.value`/`output.value` from digests.
 
+`model` is an opaque string in the Trace schema. The projection maps it verbatim to `llm.model_name` and MUST NOT parse it to derive `llm.provider`, `llm.system`, or any other attribute — a string like `"openai/gpt-4"` is one implementation's naming choice, and splitting it is exactly the kind of inference that makes two projections silently diverge.
+
 ### ToolCallEvent → TOOL span
 
 | OpenInference / OTel | AEP source |
@@ -131,7 +171,7 @@ When the traceability contract exposes only digests, the LLM span still exists �
 | span kind | `TOOL` |
 | span name | `toolName` |
 | parent | enclosing turn span |
-| start / end | `startedAt` / `completedAt` (fallback: zero-duration at `startedAt`) |
+| start / end | see [Timing rules](#timing-rules) |
 | `tool.name` | `toolName` |
 | `input.value` / `input.mime_type` | `arguments` — see [Content and MIME rules](#content-and-mime-rules) |
 | `output.value` / `output.mime_type` | `result` — same rules |
@@ -185,13 +225,22 @@ For every `input.value` / `output.value` pair:
 - Trace value is any other JSON value (object, array, number, boolean, null) → emit its JCS (RFC 8785) serialization, `mime_type` = `application/json`.
 - Trace field is **absent** (not exposed by the traceability contract, redacted, or never captured) → emit neither `*.value` nor `*.mime_type`. Digest attributes (`aep.*_digest`) still project when the Trace carries them.
 
+### Value size and truncation
+
+Turn inputs/outputs can be large, and OTel backends commonly cap attribute values. Truncation left to exporters would break determinism exactly at the observable boundary — the projection would be deterministic while what lands in the backend is not. Truncation is therefore part of the projection, not the transport:
+
+- By default the projection is **unbounded**: values emit whole.
+- A deployment MAY declare a byte limit **L** (advertised as `maxValueBytes` for server-side projections). When declared, every `input.value`/`output.value` whose UTF-8 encoding exceeds L bytes is cut to the longest prefix ≤ L bytes that ends on a UTF-8 code-point boundary, and the span additionally carries `aep.input.truncated = true` (respectively `aep.output.truncated = true`) and `aep.input.digest` (respectively `aep.output.digest`) — `sha256:` hex over the full untruncated value bytes — so the cut is detectable and the original verifiable against the Trace.
+- Two conforming projections with the same L produce identical output; the [determinism requirement](#requirements-provisional) is parameterized by L, with unbounded as the default.
+- Downstream truncation (collector or backend limits) is outside the projection's conformance boundary; deployments SHOULD configure attribute-value limits at or above L so the projected bytes survive intact.
+
 ### Timing rules
 
-OTel spans require start and end timestamps; the projection never invents timing the Trace doesn't support:
+OTel spans require start and end timestamps; the projection never invents timing the Trace doesn't support without saying so. Any span with an inferred start **or** end carries `aep.timing.inferred = true`.
 
-- Elements with `startedAt`/`completedAt` use them directly (RFC 3339 → epoch nanoseconds).
-- Elements with `startedAt` only: zero-duration span at `startedAt`.
-- `ModelCallRecord` carries no timestamps in the v0.1 schema. Its LLM span starts at the enclosing turn's `startedAt` and spans `latencyMs` when present (else zero duration), and MUST set `aep.timing.inferred = true` so consumers know the placement is approximate. See [Core hooks](#core-hooks-needed-in-the-spec) for the additive fix.
+- Elements with recorded `startedAt`/`completedAt` use them directly (RFC 3339 → epoch nanoseconds). Nothing inferred.
+- **ToolCallEvent** without `completedAt`: end = `startedAt + latencyMs` when `latencyMs` is present, else a zero-duration span at `startedAt`. Inferred either way.
+- **ModelCallRecord** carries no timestamps in the v0.1 schema. Model-call spans within a turn are laid **end-to-end in array order**: the first starts at the turn's `startedAt`; each subsequent span starts where the previous one ends; each spans its own `latencyMs` (absent → zero duration). All are flagged inferred. End-to-end placement is chosen over starting every span at the turn's `startedAt` because overlapping spans render as parallel fan-out in Phoenix/Langfuse — a false claim about the agent's behavior in the exact tools this extension serves — while sequential placement matches the common sequential-call case and is equally deterministic. See [Core hooks](#core-hooks-needed-in-the-spec) for the additive fix that removes the inference entirely.
 
 ### ID derivation
 
@@ -202,66 +251,97 @@ Span identity is derived, not generated, so the projection is reproducible and c
 | OTel `trace_id` (16 bytes) | `hex16(H("aep-oi:" + traceId))` |
 | root `span_id` (8 bytes) | `hex8(H("aep-oi:" + traceId + ":session"))` |
 | turn `span_id` | `hex8(H("aep-oi:" + traceId + ":turn:" + turnIndex))` |
-| model-call `span_id` | `hex8(H("aep-oi:" + traceId + ":turn:" + turnIndex + ":model:" + modelCallId))` |
-| tool-call `span_id` | `hex8(H("aep-oi:" + traceId + ":turn:" + turnIndex + ":tool:" + toolCallId))` |
-| policy-event `span_id` | `hex8(H("aep-oi:" + traceId + ":turn:" + turnIndex + ":policy:" + policyEventId))` |
+| model-call `span_id` | `hex8(H("aep-oi:" + traceId + ":turn:" + turnIndex + ":model:" + i))` |
+| tool-call `span_id` | `hex8(H("aep-oi:" + traceId + ":turn:" + turnIndex + ":tool:" + i))` |
+| policy-event `span_id` | `hex8(H("aep-oi:" + traceId + ":turn:" + turnIndex + ":policy:" + i))` |
+
+where `turnIndex` and `i` are decimal integers with no leading zeros: `turnIndex` is the turn's required index field, and `i` is the element's **position in its containing array** (`modelCalls`, `toolCalls`, `policyEvents`).
+
+Array positions — not `modelCallId`/`toolCallId`/`policyEventId` — feed the hash, for two reasons. The schema requires those IDs to be present but not unique, so duplicate IDs would collide two elements into one span; positions are unique by construction. And the IDs are arbitrary strings, so hashing them invites delimiter injection (a `toolCallId` of `0:policy:x` colliding with a policy-event path); with positions, every variable component is either a decimal integer or the `[A-Za-z0-9_-]`-constrained `traceId`, and the path grammar is unambiguous with no escaping needed. The element IDs still ride on the spans as `aep.*.id` attributes. Array order is fixed in the sealed Trace, so position-based identity is exactly as stable as the Trace itself.
 
 `traceId` here is the AEP Trace's own `traceId` (already required to be high-entropy per AEP-REQ-126, so the derived OTel IDs inherit its unpredictability). The `"aep-oi:"` domain-separation prefix keeps derived IDs from colliding with any other hash-derived ID scheme over the same `traceId`.
 
 ### Correlation identifiers become links
 
-When the Trace carries §11.9 `observability` blocks with `provider: "opentelemetry"`, the projection MUST NOT adopt those IDs as the projected spans' own IDs — the externally-collected spans already exist in some backend under those IDs, and emitting a second span under the same identity would collide or silently merge. Instead:
+A §11.9 `observability` block projects according to its `provider` and the well-formedness of its identifiers:
 
-- A session-level `observability` block projects as an OTel **span link** on the root span, targeting the recorded external `traceId`/`spanId`.
-- A per-turn `observability` block projects as a span link on that turn's span.
-- Each link carries `aep.link.provider` = the block's `provider`.
+1. **`provider: "opentelemetry"` with well-formed IDs** — `traceId` is 32 lowercase hex characters and not all zeros, **and** `spanId` is 16 lowercase hex characters and not all zeros (W3C Trace Context) — projects as an OTel **span link** targeting the recorded external `traceId`/`spanId`: on the root span for the session-level block, on the turn's span for a per-turn block. Each link carries `aep.link.provider` = the block's `provider`.
+2. **`provider: "opentelemetry"` with absent or malformed IDs** — the schema requires only `provider`, and the hex encoding is a SHOULD, so `{"provider": "opentelemetry"}` alone, or with a non-W3C value, is a valid Trace. No link can be formed; the block falls back to attributes on the corresponding span: `aep.observability.provider`, plus `aep.observability.trace_id` / `aep.observability.span_id` for whichever identifiers are present, verbatim.
+3. **Any other `provider`** — no OTel identity to link to; same attribute fallback as branch 2.
 
-`observability` blocks with non-OpenTelemetry providers (no well-formed trace/span identity to link to) project as attributes instead: `aep.observability.provider`, `aep.observability.trace_id`, `aep.observability.span_id` on the corresponding span.
+In no branch does the projection adopt the recorded IDs as the projected spans' *own* identities — the externally-collected spans already exist in some backend under those IDs, and emitting a second span under the same identity would collide or silently merge.
 
 ## Redaction and sensitivity
 
 The projection operates on the sealed Trace *after* redaction, so redacted content is structurally absent and cannot resurface. In addition:
 
-- `redactions[]` records project as `aep.redacted = true` on any span whose mapped source path falls under a redaction record's `path`, so a viewer can distinguish "never captured" from "captured and redacted".
-- Trace- and turn-level sensitivity labels project into `aep.sensitivity.*` attributes as specified in the tables above. Deciding which telemetry backends may receive traces of a given sensitivity level is deployment policy, out of scope here — but because the labels travel in-band, an OTel collector can enforce that policy with a standard attribute-based filter/routing rule, with no AEP-specific logic.
+- The root span carries `aep.redactions.count` whenever the Trace has a `redactions[]` array, so "was anything redacted" is answerable from any viewer.
+- A span carries `aep.redacted = true` when redaction verifiably touched it. This is computable only for redaction records whose `path` parses as an RFC 6901 JSON Pointer: each projected span corresponds to exactly one Trace element with an unambiguous pointer (e.g. the second tool call of turn 0 is `/turns/0/toolCalls/1`), and a record touches a span when either pointer is a whole-segment prefix of the other — the record redacts content inside the element, or the element sits inside a redacted subtree. Records whose `path` does not parse as an RFC 6901 pointer (the schema currently allows free-text "trace paths") contribute to `aep.redactions.count` only; implementations MUST NOT guess at matching them, because heuristic matching is precisely the silent-divergence failure the sibling proposal documents in AEP-REQ-OC-019. See [Core hooks](#core-hooks-needed-in-the-spec) for the schema tightening that makes every record matchable.
+- Trace- and turn-level sensitivity labels project into `aep.sensitivity.*` attributes as specified in the mapping tables. Deciding which telemetry backends may receive traces of a given sensitivity level is deployment policy, out of scope here — but because the labels travel in-band, an OTel collector can enforce that policy with a standard attribute-based filter/routing rule, with no AEP-specific logic.
+
+## Fields deliberately not projected
+
+Principle 4 promises no silent drops, so here is the explicit list:
+
+| Field | Why not projected |
+|---|---|
+| `injectedContext` | Replay material, not telemetry — and routinely the most sensitive content in the Trace. |
+| `turns[].stateSnapshot` | Same: replay material capturing internal agent state. |
+| `seed` | Replay material; publishing it invites replaying outside AEP's mode-authorization controls. |
+| `sealed` | Constant — the projection is defined only over sealed Traces, so the attribute would always be `true`. |
+| `sealedAt`, `canonicalSerialization`, `signature` | Sealing envelope. `aep.canonical_digest` alone anchors a span tree to its sealed artifact; signature verification requires the Trace bytes anyway, so carrying the envelope in telemetry adds surface without adding verifiability. |
+| `redactions[].reason` / `redactedAt` / `originalDigest` | Audit metadata. The projection carries the count and per-span `aep.redacted` flags; the audit detail stays in the Trace. |
+| `turns[].latencyMs`, `toolCalls[].latencyMs` (when timestamps recorded) | Redundant with span duration. (`latencyMs` *is* consumed by the [Timing rules](#timing-rules) when timestamps are missing.) |
 
 ## Optional server-side projection endpoint
 
-The projection needs no server support — any client holding a Trace can compute it, and a conforming client-side projector works against every AEP server today. Servers that want to serve it directly (e.g. to feed a collector without shipping full Traces to clients) advertise the extension and expose:
+The projection needs no server support — any client holding a Trace can compute it, and a conforming client-side projector works against every AEP server today. Servers that want to serve it directly (e.g. to feed a collector without shipping full Traces to clients) advertise `projectionEndpoint: true` and expose:
 
 ```
 GET /aep/traces/{traceId}/projections/openinference
 ```
 
-JSON-RPC equivalent: `aep.trace.projectOpenInference`. The response is the span tree in OTLP/JSON form (`ExportTraceServiceRequest`). The endpoint is defined only for sealed Traces; requesting the projection of an unsealed Trace fails with `-32030` (`invalid_state_transition`). Authorization, mode-based access, and existence-hiding semantics are identical to fetching the Trace itself — the projection reveals a subset of the Trace, so it MUST NOT be reachable by any caller who could not fetch the Trace.
+JSON-RPC equivalent: `aep.trace.projectOpenInference`. The response is the span tree in OTLP/JSON form (`ExportTraceServiceRequest`). Two transport details are normative because generic tooling gets them wrong:
+
+- **ID encoding.** In OTLP/JSON, `trace_id` and `span_id` MUST be encoded as lowercase hexadecimal strings (32 and 16 characters), per the OTLP specification's explicit override of protobuf's canonical JSON mapping. A generic protobuf-JSON serializer emits base64 for `bytes` fields and produces output that is silently non-interoperable — and non-conforming here.
+- **Sealed only.** The endpoint is defined only for sealed Traces; requesting the projection of an unsealed Trace fails with `-32030` (`invalid_state_transition`).
+
+Authorization, **mode-based access**, and existence-hiding semantics are identical to fetching the Trace itself. The projection reveals a subset of the Trace — including tool calls and (under a permissive traceability contract) prompts — so it MUST NOT be reachable by any caller who could not fetch the Trace, and the Trace schema's mode rule carries over: a projection of a Trace captured in `toolbox` MUST NOT be served to a caller authorized only for `blackbox`.
 
 ## Requirements (provisional)
 
-**AEP-REQ-OI-001**: A conforming projection MUST be a pure function of a single sealed Trace: it MUST NOT read external systems, clocks, or configuration that varies the output, and MUST NOT be defined for unsealed Traces.
+**AEP-REQ-OI-001**: A conforming projection MUST be a pure function of a single sealed Trace and the declared truncation limit L (default: unbounded): it MUST NOT read external systems, clocks, or other configuration that varies the output, and MUST NOT be defined for unsealed Traces.
 
-**AEP-REQ-OI-002**: Two conforming projections of the same sealed Trace MUST produce identical span trees — identical span/trace IDs, parentage, names, kinds, timestamps, attributes, events, and links. (Resource-level attributes added by an exporter, e.g. `service.name`, are outside the projection and exempt.)
+**AEP-REQ-OI-002**: Two conforming projections of the same sealed Trace under the same L MUST produce identical span trees — identical span/trace IDs, parentage, names, kinds, timestamps, attributes, events, and links. (Resource-level attributes added by an exporter, e.g. `service.name`, are outside the projection and exempt.)
 
-**AEP-REQ-OI-003**: Trace and span IDs MUST be derived exactly per [ID derivation](#id-derivation). Implementations MUST NOT substitute generated or externally-recorded IDs for derived ones.
+**AEP-REQ-OI-003**: A conforming projection MUST emit the OpenInference vocabulary exactly as frozen in this document ([Convention pinning](#convention-pinning), `openinference-semantic-conventions` 0.1.31) and MUST NOT substitute names, kinds, or event conventions from any other OpenInference release. Adopting a newer release requires a revision of this extension and a changed `conventionsVersion` advertisement.
 
-**AEP-REQ-OI-004**: Span kinds MUST follow the mapping tables (`AGENT` root, `CHAIN`/`AGENT` turns, `LLM` model calls, `TOOL` tool calls, `GUARDRAIL` policy events). Implementations MUST NOT remap kinds or invent spans for Trace elements this document maps to span events.
+**AEP-REQ-OI-004**: Trace and span IDs MUST be derived exactly per [ID derivation](#id-derivation), with array positions — not element IDs — as the variable path components. Implementations MUST NOT substitute generated or externally-recorded IDs for derived ones.
 
-**AEP-REQ-OI-005**: The projection MUST NOT synthesize content absent from the Trace. Where the Trace carries only digests, the projection carries only digests; `input.value`/`output.value` MUST be emitted only from content literally present in the Trace, byte-preserved per the [Content and MIME rules](#content-and-mime-rules).
+**AEP-REQ-OI-005**: Span kinds MUST follow the mapping tables (`AGENT` root, `CHAIN`/`AGENT` turns, `LLM` model calls, `TOOL` tool calls, `GUARDRAIL` policy events). Implementations MUST NOT remap kinds or invent spans for Trace elements this document maps to span events.
 
-**AEP-REQ-OI-006**: Sensitivity labels present in the Trace MUST project into the corresponding `aep.sensitivity.*` attributes, and spans whose source content falls under a `redactions[]` record MUST carry `aep.redacted = true`. `injectedContext` MUST NOT be projected.
+**AEP-REQ-OI-006**: The projection MUST NOT synthesize content or facts absent from the Trace. Where the Trace carries only digests, the projection carries only digests; `input.value`/`output.value` MUST be emitted only from content literally present in the Trace, byte-preserved per the [Content and MIME rules](#content-and-mime-rules) (subject to AEP-REQ-OI-010); and `ModelCallRecord.model` MUST map verbatim to `llm.model_name` — implementations MUST NOT parse it to emit `llm.provider`, `llm.system`, or any derived attribute.
 
-**AEP-REQ-OI-007**: Timestamps MUST follow the [Timing rules](#timing-rules); any span whose timing is inferred rather than recorded MUST carry `aep.timing.inferred = true`.
+**AEP-REQ-OI-007**: Sensitivity labels present in the Trace MUST project into the corresponding `aep.sensitivity.*` attributes. When the Trace carries `redactions[]`, the root span MUST carry `aep.redactions.count`; `aep.redacted = true` MUST be set on exactly the spans matched by RFC 6901-parseable redaction paths under the whole-segment-prefix rule ([Redaction and sensitivity](#redaction-and-sensitivity)), and implementations MUST NOT apply heuristic matching to unparseable paths. `injectedContext`, `stateSnapshot`, and `seed` MUST NOT be projected.
 
-**AEP-REQ-OI-008**: §11.9 `observability` blocks with `provider: "opentelemetry"` MUST project as span links, never as the projected spans' own identities.
+**AEP-REQ-OI-008**: Timestamps MUST follow the [Timing rules](#timing-rules), including `latencyMs`-based end inference for tool calls and end-to-end sequential placement for model-call spans; any span whose start or end is inferred rather than recorded MUST carry `aep.timing.inferred = true`.
 
-**AEP-REQ-OI-009**: Servers advertising `openinference-projection` in `capabilities.extensions` MUST implement the projection endpoint for sealed Traces with authorization and existence-hiding semantics identical to Trace retrieval, and MUST reject projection of unsealed Traces with `-32030`.
+**AEP-REQ-OI-009**: §11.9 `observability` blocks MUST project per the three-branch rule in [Correlation identifiers become links](#correlation-identifiers-become-links): a span link only when `provider` is `"opentelemetry"` and both identifiers are well-formed W3C values; the `aep.observability.*` attribute fallback otherwise. Recorded identifiers MUST NOT become the projected spans' own identities in any branch.
 
-**AEP-REQ-OI-010**: A server-side projection MUST equal the projection a conforming client would compute from the fetched Trace (AEP-REQ-OI-002 applies across the client/server boundary).
+**AEP-REQ-OI-010**: When a truncation limit L is declared, truncation MUST be applied within the projection per [Value size and truncation](#value-size-and-truncation) — UTF-8-boundary prefix cut, `aep.input.truncated`/`aep.output.truncated` marker, and full-value digest — and MUST NOT be delegated to exporters or collectors.
+
+**AEP-REQ-OI-011**: Servers advertising `openinference-projection` MUST publish the extensionData payload of [Extension advertisement](#extension-advertisement) (`conventionsVersion`, `projectionEndpoint`, and `maxValueBytes` when a limit applies). Servers advertising `projectionEndpoint: true` MUST implement the projection endpoint for sealed Traces with authorization, mode-based access, and existence-hiding semantics identical to Trace retrieval, and MUST reject projection of unsealed Traces with `-32030`.
+
+**AEP-REQ-OI-012**: OTLP/JSON responses MUST encode `trace_id` and `span_id` as lowercase hexadecimal strings per the OTLP specification's JSON mapping. Base64-encoded IDs (protobuf's default JSON mapping for `bytes`) are non-conforming.
+
+**AEP-REQ-OI-013**: A server-side projection MUST equal the projection a conforming client would compute from the fetched Trace under the same L (AEP-REQ-OI-002 applies across the client/server boundary).
 
 ## Core hooks needed in the spec
 
-One additive schema change would remove the only approximation in the mapping:
+Two additive changes to the core would remove the only approximations in the mapping:
 
-1. **`ModelCallRecord.startedAt` / `completedAt`** (optional, RFC 3339) — v0.1 records only `latencyMs`, forcing the inferred-timing rule above. Optional timestamps are additive under the compatibility policy (§14, AEP-REQ-105); Traces without them continue to project with `aep.timing.inferred = true`.
+1. **`ModelCallRecord.startedAt` / `completedAt`** (optional, RFC 3339) — v0.1 records only `latencyMs`, forcing the inferred sequential-placement rule above. Optional timestamps are additive under the compatibility policy (§14, AEP-REQ-105); Traces without them continue to project with `aep.timing.inferred = true`.
+2. **`RedactionRecord.path` constrained to RFC 6901** — the schema currently describes `path` as "JSON pointer or trace path", a free-text union no consumer can match against reliably. The sibling Operation Context proposal already requires RFC 6901 with explicit `~0`/`~1` escaping for exactly this reason (AEP-REQ-OC-019: an unescaped emitter produces a *valid* pointer addressing a different location, so implementations disagree silently rather than erroring). The same tightening here would make every redaction record matchable and let the per-span `aep.redacted` flag cover the whole `redactions[]` array instead of its parseable subset.
 
 No other hook is required: every other field the projection consumes is already in the v0.1 Trace schema.
 
@@ -307,19 +387,41 @@ AGENT "example.support-agent"                     span_id = H(...":session")
         input.value  = {"question":"Where is my refund for order 123?"}   (application/json, JCS)
         output.value = {"answer":"Refund issued, arriving in 3-5 days."}  (application/json, JCS)
         │
-        ├── LLM "claude-sonnet-5"                 span_id = H(...":turn:0:model:mc_1")
+        ├── LLM "claude-sonnet-5"                 span_id = H(...":turn:0:model:0")
         │     llm.model_name = "claude-sonnet-5"
         │     llm.token_count.prompt = 812 · completion = 96 · total = 908
-        │     aep.timing.inferred = true          (12:00:00 + 1800ms)
+        │     aep.model_call.id = "mc_1"
+        │     aep.timing.inferred = true          (12:00:00.000 → 12:00:01.800)
         │
-        └── TOOL "lookupOrder"                    span_id = H(...":turn:0:tool:tc_1")
+        └── TOOL "lookupOrder"                    span_id = H(...":turn:0:tool:0")
               tool.name = "lookupOrder"
               input.value  = {"orderId":"123"}    (application/json)
               output.value = {"status":"refunded"}
+              aep.tool_call.id = "tc_1"
               aep.tool_call.sandbox_fidelity = "recorded"
 ```
 
 Point an OTLP exporter at that span set and the session renders in Phoenix or Langfuse as an agent trace with no further work.
+
+## Conformance summary
+
+An implementation producing projections (client- or server-side):
+
+1. MUST project only sealed Traces, as a pure function of the Trace and the declared truncation limit (AEP-REQ-OI-001).
+2. MUST produce byte-identical span trees for the same Trace and limit, across implementations and across the client/server boundary (AEP-REQ-OI-002, AEP-REQ-OI-013).
+3. MUST emit the OpenInference vocabulary frozen at `openinference-semantic-conventions` 0.1.31, upgrading only via extension revision (AEP-REQ-OI-003).
+4. MUST derive trace/span IDs from array positions per the derivation table, never generating or reusing external IDs (AEP-REQ-OI-004).
+5. MUST keep span kinds fixed per the mapping tables (AEP-REQ-OI-005).
+6. MUST NOT synthesize content or inferred facts — digest-only stays digest-only, and `llm.provider` is never derived from the model string (AEP-REQ-OI-006).
+7. MUST propagate sensitivity labels and redaction markers, matching redaction paths only when RFC 6901-parseable, and MUST NOT project `injectedContext`, `stateSnapshot`, or `seed` (AEP-REQ-OI-007).
+8. MUST follow the timing rules and flag every inferred start/end with `aep.timing.inferred` (AEP-REQ-OI-008).
+9. MUST project §11.9 correlation blocks as links only when well-formed OpenTelemetry identifiers are present, falling back to attributes otherwise (AEP-REQ-OI-009).
+10. MUST apply any truncation inside the projection with markers and full-value digests, never delegating it to exporters (AEP-REQ-OI-010).
+
+A server advertising the extension additionally:
+
+11. MUST publish `conventionsVersion` and `projectionEndpoint` (and `maxValueBytes` when limited) in `capabilities.extensionData` per §5.1 (AEP-REQ-OI-011).
+12. MUST, when `projectionEndpoint: true`, serve sealed-Trace projections with authorization, mode-based access, and existence-hiding identical to Trace retrieval, rejecting unsealed Traces with `-32030` (AEP-REQ-OI-011) and encoding OTLP/JSON IDs as lowercase hex (AEP-REQ-OI-012).
 
 ## Non-goals
 
@@ -331,6 +433,6 @@ Point an OTLP exporter at that span set and the session renders in Phoenix or La
 
 ## Open questions
 
-1. **Composite-session graph conventions.** The mapping emits `graph.node.id` on composite-session turn spans, following OpenInference's agent-graph conventions. Those conventions are newer than the core span-kind vocabulary; if they shift, the CSE-specific rows of the mapping may need a revision independent of the rest.
+1. **Composite-session graph conventions.** The mapping emits `graph.node.id` on composite-session turn spans, following OpenInference's agent-graph conventions as frozen at the pinned release. Those conventions are newer than the core span-kind vocabulary; if they shift upstream, the CSE-specific rows are the ones most likely to need attention in the next convention-revision cycle. Pinning contains the blast radius but doesn't remove it.
 2. **Reasoning as events vs. spans.** Reasoning steps project as span events because they carry no duration. Implementations with rich, long-running reasoning phases may prefer spans; that would require optional start/end timestamps on `ReasoningStep` (an additive core hook this proposal does not yet request).
-3. **Attribute size limits.** Turn inputs/outputs can be large, and OTel backends commonly truncate attribute values. The projection is defined without size limits; whether to specify a normative truncation marker (e.g. `aep.truncated = true`) or leave truncation to exporters needs implementation experience.
+3. **Conventions-version pinning granularity.** This revision pins a whole `openinference-semantic-conventions` release. If upstream begins versioning its spec text independently of the package, or if per-namespace stability markers appear, pinning could become finer-grained than release-level. Until then, release-level is the only anchor upstream offers.
