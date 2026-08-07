@@ -78,6 +78,7 @@ aep/
 │   ├── DATASET.md           # Dataset extension companion
 │   ├── CSE.md               # Composite Session Evaluation extension
 │   ├── OPERATION-CONTEXT.md # Operation Context Resolution extension (draft proposal)
+│   ├── OPENINFERENCE.md     # OpenInference Trace Projection extension (draft proposal)
 │   └── ROADMAP.md
 ├── examples/
 │   └── reference-agent/     # Fictional agent with full contract and scenarios
