@@ -2,7 +2,7 @@
 
 *A normative mapping from the AEP Trace to an OpenInference span tree, so every conforming Trace can land in Phoenix, Langfuse, Arize, or any OTLP backend without hand-written glue.*
 
-**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 7
+**Extension ID:** `openinference-projection` (proposed) · **Spec section:** none yet — this is a draft proposal · **Status:** draft, revision 8
 
 ---
 
@@ -121,6 +121,20 @@ Sibling spans are emitted in a **total order**: start time, then a fixed kind pr
 
 The total order binds implementations claiming [reproducible conformance](#two-conformance-levels), where it is part of byte-identity. At the semantic level, order is unspecified: a batching OpenTelemetry exporter reorders spans and remains conforming, because span identity and parentage — not array position — carry the semantics.
 
+### Sequence survives the transport
+
+Identity and parentage survive reordering because the ids carry them. **Sequence does not**, and the sentence above is exactly where it is lost. Every child span therefore carries its source array position as an attribute — `aep.model_call.index`, `aep.tool_call.index`, `aep.policy.index` — mirroring the `aep.turn.index` this document already specifies for turns.
+
+Timestamps cannot be relied on to recover it, because ties are the common case rather than an edge case:
+
+- `ModelCallRecord.latencyMs` is optional, so a Trace without it lays *every* model-call span zero-duration at the turn's `startedAt` under [Timing rules](#timing-rules) — identical start **and** end.
+- `PolicyEvent` spans are zero-duration by construction, so two events stamped in the same millisecond are indistinguishable.
+- Element ids may be absent in practice: the schema requires them, but a projection built from a narrower internal record legitimately omits `aep.*.id` rather than inventing one (principle 3). Such spans have nothing left at all.
+
+A probe on four sibling model calls with no `latencyMs` produces four spans on one instant, no ids, and — after a batching exporter — no order. The position attribute is the only fact that survives, and it costs one integer per span.
+
+The attribute is *not* a substitute for the total emission order: reproducible conformance still fixes the array order, and the two must agree. It exists so a semantic-level consumer, or any consumer reading spans back out of a backend that reordered them, can reconstruct what the Trace recorded.
+
 All projected spans are emitted under a single OTel **InstrumentationScope** with `name` = `aep.openinference-projection` and `version` = this extension's version (`0.1.0`). In OTLP/JSON the scope sits between the resource and the spans; left unpinned, two conforming implementations would produce different documents while both claiming conformance. Pinning it also gives backends a clean filter for "spans that came from an AEP projection". Resource-level attributes remain outside the projection (AEP-REQ-OI-002).
 
 Finer-grained interleaving than timestamps record is not reconstructed — the Trace is the limit of fidelity.
@@ -228,6 +242,7 @@ The projection deliberately avoids "composite session" as a test of its own. The
 | `llm.token_count.prompt` | `inputTokens` (when present) |
 | `llm.token_count.completion` | `outputTokens` (when present) |
 | `llm.token_count.total` | `inputTokens + outputTokens` (only when both present) |
+| `aep.model_call.index` | position in `modelCalls` — see [Sequence survives the transport](#sequence-survives-the-transport) |
 | `aep.model_call.id` | `modelCallId` |
 | `aep.model_call.prompt_digest` / `aep.model_call.response_digest` | `promptDigest` / `responseDigest` (when present) |
 
@@ -247,6 +262,7 @@ When the traceability contract exposes only digests, the LLM span still exists �
 | `input.value` / `input.mime_type` | `arguments` — see [Content and MIME rules](#content-and-mime-rules) |
 | `output.value` / `output.mime_type` | `result` — same rules |
 | status | `ERROR` when `error` present, with an OTel `exception` span event (`exception.message` = `error`); `OK` otherwise |
+| `aep.tool_call.index` | position in `toolCalls` — see [Sequence survives the transport](#sequence-survives-the-transport) |
 | `aep.tool_call.id` | `toolCallId` |
 | `aep.tool_call.sandboxed` | `sandboxed` (when present) |
 | `aep.tool_call.sandbox_fidelity` | `sandboxFidelity` (when present) — evaluation-specific signal observability tools don't model: whether the tool result came from a stub, a recording, or the real thing |
@@ -260,6 +276,7 @@ When the traceability contract exposes only digests, the LLM span still exists �
 | parent | enclosing turn span |
 | start / end | `timestamp` / `timestamp` (zero duration — PolicyEvents are instants) |
 | status | `ERROR` when `outcome` is `refused` or `escalated`; `OK` otherwise |
+| `aep.policy.index` | position in `policyEvents` — see [Sequence survives the transport](#sequence-survives-the-transport) |
 | `aep.policy.event_id` | `policyEventId` |
 | `aep.policy.rule_id` | `ruleId` |
 | `aep.policy.outcome` | `outcome` |
@@ -440,6 +457,8 @@ Requirements are grouped by [conformance level](#two-conformance-levels). Semant
 
 **AEP-REQ-OI-012**: OTLP/JSON responses MUST encode `trace_id` and `span_id` as lowercase hexadecimal strings per the OTLP specification's JSON mapping — base64-encoded IDs (protobuf's default JSON mapping for `bytes`) are non-conforming — with structural `SpanKind` `INTERNAL`, the profile kind carried as `openinference.span.kind`, and the pinned InstrumentationScope.
 
+**AEP-REQ-OI-015**: Every projected child span MUST carry its position in its source array as `aep.model_call.index`, `aep.tool_call.index`, or `aep.policy.index` — a zero-based integer, the same `i` used in [ID derivation](#id-derivation). Turn spans carry the equivalent as `aep.turn.index`. These bind at **both** conformance levels: they exist precisely because emission order does not bind at the semantic level, and a consumer MUST be able to reconstruct source order from attributes alone (see [Sequence survives the transport](#sequence-survives-the-transport)). Where an element id is also present the two MUST agree with the span's derived identity — the index is authoritative for ordering, the id for correlation.
+
 ### Reproducible conformance (optional, advertised with `reproducible: true`)
 
 Requirement numbers are stable, not contiguous: AEP-REQ-OI-002 and OI-013 were introduced at earlier revisions as universal requirements and keep their identifiers now that they bind only at this level.
@@ -526,7 +545,7 @@ Every implementation claiming the extension (**semantic conformance**, achievabl
 1. MUST project only sealed Traces, as a pure function of the Trace and the declared truncation limit (AEP-REQ-OI-001).
 2. MUST emit the OpenInference vocabulary frozen at `openinference-semantic-conventions` 0.1.31, upgrading only via extension revision (AEP-REQ-OI-003).
 3. MUST derive the trace ID from the Trace's `traceId` and span IDs from array positions, per the derivation table, never generating or reusing external IDs (AEP-REQ-OI-004).
-4. MUST keep span kinds fixed per the mapping tables (AEP-REQ-OI-005).
+4. MUST keep span kinds fixed per the mapping tables (AEP-REQ-OI-005), and carry each child span's source array position so sequence is recoverable from attributes alone (AEP-REQ-OI-015).
 5. MUST NOT synthesize content or inferred facts — digest-only stays digest-only, and `llm.provider` is never derived from the model string (AEP-REQ-OI-006).
 6. MUST propagate sensitivity labels and redaction markers, matching redaction paths only when RFC 6901-parseable, and MUST NOT project `injectedContext`, `stateSnapshot`, or `seed` (AEP-REQ-OI-007).
 7. MUST follow the timing rules and flag every inferred start/end with `aep.timing.inferred` (AEP-REQ-OI-008).
