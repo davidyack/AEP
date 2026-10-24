@@ -64,6 +64,10 @@
       "type": "object",
       "description": "Snapshot of context injected at session creation. Required for deterministic replay."
     },
+    "identity": {
+      "$ref": "./test-identity.schema.json#/$defs/IdentityBinding",
+      "description": "Snapshot of the test identity bound to the session, including fixture version/digest (spec §8.2, AEP-REQ-149). Present when the session bound an identity; replay rebinds the same identityId and compares the fixture (AEP-REQ-151). Carries no credentials."
+    },
     "seed": {
       "type": "string",
       "description": "Random seed used, when the agent declares 'seeded' determinism."

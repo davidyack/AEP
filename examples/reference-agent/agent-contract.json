@@ -108,6 +108,11 @@
         }
       }
     ],
+    "identity": {
+      "binding": "required",
+      "kinds": ["user"],
+      "description": "Reads the acting user's workspace membership and prior inquiry threads; attributes every saved refinement to the acting user. Never acts as a default principal."
+    },
     "historyModel": "linear",
     "maxHistoryTurns": 50
   },

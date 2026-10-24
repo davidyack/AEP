@@ -122,6 +122,20 @@ Instead, `extensionData` is a parallel map keyed by extension ID. The array stay
 
 The payload envelope (`version`, optional `schemaRef`, `payload`) is deliberately minimal. Payload formats version independently of the protocol so vendor extensions can evolve without AEP releases, and `schemaRef` is descriptive rather than operational: implementations must not auto-fetch arbitrary schema URLs, because doing so would introduce SSRF surface, availability coupling, and mutable-schema attacks into contract validation.
 
+## Why test identities are discovered, not supplied
+
+Context injection answers "what does the agent see?" It never answered "who is the agent?" — and for a product-embedded agent that is not a rhetorical question: the agent reads a workspace, checks a permission, writes a record, and does each of those as some principal the product's authorization layer recognizes. Implementations that hit this silently resolved it one of two ways. Either the agent fell back to a default principal — ambient state that never appeared in the Trace, which is exactly what the injection discipline exists to prevent — or the evaluator was handed an account and a token, which turns a test harness into a credential store and a leaked CI log into product access.
+
+The spec takes a third position. The target establishes synthetic principals in its evaluation environment; the evaluator *discovers* them (`GET /aep/identities`) and *names* one at session start; the server binds it. Three consequences follow, and each was a design choice rather than an accident.
+
+**Identity is a reference, not content.** A `user` injection point carries a profile the evaluator writes. A test identity stands for state the evaluator cannot write — memberships, seeded records, the product's own notion of who this is. Posting it in a request body would be fiction; letting the evaluator fabricate an `identityId` would be worse. So identities are server-authored and read-only through AEP. Provisioning is deliberately absent from v0.1: a target that wants to offer it can, out of band, and evidence will show whether a protocol method is warranted.
+
+**No credential crosses the surface.** The evaluator's own token authorizes the bind; the identity's product credentials never leave the server. That makes `identityId` a plain handle rather than a capability, which is why it may be human-readable and why the threat model (T9) treats its appearance in a log as harmless. This is the same move AEP-REQ-097 made for injected context, carried through to the one case where "but the agent has to act as someone" used to be the excuse.
+
+**The binding is in the Trace.** AEP-REQ-117 says no hidden server state may affect outputs without Trace representation. A bound principal is influence-bearing state, so the resolved snapshot — identity, tenancy, roles, and the fixture's version and digest — is recorded on the session and the Trace. The fixture fields are what keep replay honest: a replay rebinds the same identity and compares versions before it may claim reproduction. Without them, a seeded workspace that drifted between runs would present as a regression in the agent.
+
+Discovery is Core Profile rather than an extension because the question it answers — "which principals may I act as against this agent?" — is part of discovery in the same way `authorizedModes` is. The cost to a server with no identity-bound agents is an endpoint that returns an empty list; the cost of making it optional would be that evaluators could not tell "this server has no identities" from "this server does not speak identities," and would fall back to the ambient-principal behavior the section exists to retire.
+
 ## Why the spec has an "Open Questions" section
 
 Specifications that pretend to be complete when they aren't set implementers up for unpleasant surprises. Section 17 of the spec lists what we know we haven't yet solved — streaming, scoring, branching, sandbox fidelity, replay format, multi-agent, cost attribution — so implementers know where the ice is thin.

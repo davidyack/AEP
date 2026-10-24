@@ -33,6 +33,7 @@ An agent is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-019 | Maintain session state across turns for multi-turn agents | §6.4 |
 | AEP-REQ-034 | Declare contextModel.injectionPoints with schemas | §8 |
 | AEP-REQ-038 | Consume context only from injected sources | §8 |
+| AEP-REQ-146 | Declare contextModel.identity.binding; never act as an ambient/default principal when none is bound | §8.2 |
 | AEP-REQ-039 | Support at least blackbox and graybox modes | §9 |
 | AEP-REQ-060 | Deterministic-replay agents declare determinism level | §11.4 |
 | AEP-REQ-061 | Seeded agents capture seed + model parameters in traces | §11.4 |
@@ -76,9 +77,20 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-026 | Discovery summaries include authorizedModes for caller | §7.1 |
 | AEP-REQ-027 | Discovery supports updatedSince for incremental sync; summaries carry lastUpdatedAt | §7.1 |
 | AEP-REQ-028 | Unauthorized GET /agents/{id} returns -32001, not -32010 | §7.1 |
+| AEP-REQ-141 | Implement GET /aep/identities with pagination; list only identities the caller may bind | §7.1 |
+| AEP-REQ-142 | Identity discovery supports agent/mode/kind/tenant/status/q/updatedSince filters; rejects unknown ones | §7.1 |
+| AEP-REQ-143 | Unauthorized GET /identities/{id} returns -32070, not -32010 | §7.1 |
 | AEP-REQ-035 | Supply injectedContext at session start | §8 |
 | AEP-REQ-036 | Validate injected context; -32040 on mismatch | §8 |
 | AEP-REQ-037 | Include injectedContext in Trace | §8 |
+| AEP-REQ-144 | Test identities are synthetic, target-established, and carry no real PII | §8.2 |
+| AEP-REQ-145 | No identity credential crosses the AEP surface; binding is server-side under the evaluator's authorization | §8.2 |
+| AEP-REQ-147 | At least one applicable identity exists for every agent with required binding | §8.2 |
+| AEP-REQ-148 | Validate identity binding at session start; -32070 / -32071 / -32072 | §8.2 |
+| AEP-REQ-149 | Identity fixed for session lifetime; snapshot on EvaluationSession.identity and Trace.identity | §8.2 |
+| AEP-REQ-150 | Fixture declares version + resetPolicy; per-session reset and concurrency honored; no cross-identity leakage | §8.2 |
+| AEP-REQ-151 | Replay rebinds the same identity and compares fixture version/digest; no byte-identity claim across mismatch | §8.2 |
+| AEP-REQ-153 | Audit-log identity bindings, rejections, and fixture resets | §8.2 |
 | AEP-REQ-040 | Reject unsupported modes with -32003 | §9 |
 | AEP-REQ-041 | Enforce mode visibility boundaries | §9 |
 | AEP-REQ-042 | Traces respect mode visibility | §9 |
@@ -142,6 +154,7 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-136 | Treat unknown extension payloads as opaque | §5.1 |
 | AEP-REQ-137 | Never automatically dereference arbitrary schemaRef values | §5.1 |
 | AEP-REQ-029 | Use idempotency keys correctly when retrying | §7.3 |
+| AEP-REQ-152 | Obtain identityId from discovery; bind when required; never pass identity credentials via injectedContext or turns | §8.2 |
 | AEP-REQ-082 | Respect retryAfterMs | §12.3 |
 | AEP-REQ-083 | Don't retry non-retryable errors | §12.3 |
 

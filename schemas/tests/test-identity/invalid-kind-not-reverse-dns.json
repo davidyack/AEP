@@ -1,0 +1,9 @@
+{
+  "identityId": "eval.pm-standard",
+  "kind": "Admin",
+  "displayName": "Standard product manager",
+  "agentIds": ["example.inquiry-assistant"],
+  "modes": ["blackbox"],
+  "status": "available",
+  "lastUpdatedAt": "2026-04-15T00:00:00Z"
+}

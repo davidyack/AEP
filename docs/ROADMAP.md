@@ -29,6 +29,8 @@ Working document. Priorities reflect current understanding; order is a signal, n
 
 5. **Sandbox fidelity contracts.** Tighten what `sandbox.fidelity` declarations guarantee, with verification hooks servers can expose.
 
+6. **Test identity provisioning and fixture reset.** v0.1 discovers the identities a target established out of band (spec §8.2) and deliberately offers no method to create, alter, or reset one. Evidence from CI adopters will show whether an on-demand reset or a scoped provisioning call belongs in the protocol or stays a deployment concern.
+
 ## v0.3 (probably)
 
 - **Composite Session Evaluation (CSE) extension.** The v0.1 core includes the hooks (graph in sessions, nodeId on trace turns, compositeCapable on contracts, agentId-or-graph on session start). The extension spec itself — graph schema, handoff semantics, node/edge/path/graph evaluation targets, CSE-specific scoring dimensions — is a companion specification pending in v0.2.

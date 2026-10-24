@@ -60,6 +60,7 @@
             "agentId": {"type": "string"},
             "agentVersion": {"type": "string"},
             "testMode": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
+            "identityId": {"type": "string", "description": "Test identity bound to the session, when any (spec §8.2). Only the handle; the full snapshot is on the Trace."},
             "startedAt": {"type": "string", "format": "date-time"}
           }
         }

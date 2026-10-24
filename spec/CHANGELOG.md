@@ -36,6 +36,15 @@ Optional: `policy-profile`, `tool-capability`, `stream-event`, `dataset`.
 
 ## [Unreleased]
 
+### Test identities
+
+- Added **test identities** (§8.2): synthetic principals the target establishes in its evaluation environment so a product-embedded agent can act *as someone* the product's authorization layer recognizes, without an ambient default principal (AEP-REQ-038/117) and without real accounts or credentials reaching an evaluator (AEP-REQ-097). Evaluators discover identities and bind one by `identityId` at session start; they never create them and never hold their credentials — the server establishes the acting principal under the evaluator's own authorization.
+- Added Core Profile **identity discovery** endpoints `GET /aep/identities` and `GET /aep/identities/{identityId}` (§7.1), with `aep.identity.list` / `aep.identity.get` JSON-RPC equivalents, filtering (`agent`, `mode`, `kind`, `tenant`, `status`, `q`, `updatedSince`), pagination, and existence-hiding semantics. The list is legitimately empty on a server with no identity-bound agents.
+- Added `contextModel.identity.binding` (`none | optional | required`, default `none`) to the Agent Contract and `identityBinding` to `AgentSummary`; `identityId` on `POST /aep/sessions` / `aep.session.start`; an `IdentityBinding` snapshot (identity, tenancy, roles, fixture version + digest, `boundAt`) on `EvaluationSession.identity` and `Trace.identity`; optional `identityId` on the `session.started` stream event.
+- New schema [`test-identity.schema.json`](../schemas/test-identity.schema.json) (`TestIdentity` plus `$defs/IdentityBinding`), with fixtures under `schemas/tests/test-identity/`. Versioned, digested **fixtures** behind an identity make replay honest: replay rebinds the same identity and compares fixture version/digest before claiming reproduction.
+- New error codes `-32070 identity_not_found` (404), `-32071 identity_binding_invalid` (400), `-32072 identity_unavailable` (503, retryable).
+- Requirements AEP-REQ-141 through AEP-REQ-153. Additive for agents and evaluators (an absent `identity` declaration means `none`); servers gain one Core Profile endpoint pair that may return an empty list. Identity provisioning and fixture reset as protocol operations are deferred (§17).
+
 ### Capability extension data
 
 - Added optional **`CapabilitiesRegistry.extensionData`** (§5.1), allowing registered and reverse-DNS vendor extensions to publish versioned structured metadata (`version`, optional `schemaRef`, object `payload`).

@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aep.dev/schemas/test-identity.schema.json",
+  "title": "TestIdentity",
+  "description": "A synthetic principal the target establishes in its evaluation environment so an agent can act as a known user or service during evaluation (spec §8.2). Returned by GET /aep/identities and GET /aep/identities/{identityId}. Evaluators discover identities and bind one at session start by identityId; they never create them and never receive the identity's credentials (AEP-REQ-145). The document is descriptive: additionalProperties is false so no credential-shaped field can be added, and 'attributes' MUST NOT carry secrets or real PII (AEP-REQ-144).",
+  "type": "object",
+  "required": ["identityId", "kind", "displayName", "agentIds", "modes", "status", "lastUpdatedAt"],
+  "properties": {
+    "identityId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Stable handle the evaluator passes as identityId at session start. Possession confers nothing: binding is authorized against the caller's own credential (AEP-REQ-145), so this need not be high-entropy and MAY be human-readable."
+    },
+    "kind": {
+      "oneOf": [
+        {"enum": ["user", "service"]},
+        {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
+      ],
+      "description": "'user' — a synthetic end-user principal. 'service' — a non-human principal (integration, automation, agent-to-agent caller). Custom kinds use reverse-DNS prefixes."
+    },
+    "displayName": {"type": "string", "minLength": 1},
+    "description": {
+      "type": "string",
+      "description": "What this identity is for: its role, what seeded data it can see, what it cannot do. Evaluators choose identities from this text."
+    },
+    "tenancy": {
+      "type": "object",
+      "required": ["tenantId"],
+      "properties": {
+        "tenantId": {"type": "string", "minLength": 1, "description": "Evaluation tenant / workspace / organization the identity belongs to. MUST be an evaluation tenant, never a production tenant (AEP-REQ-086, AEP-REQ-130)."},
+        "displayName": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "roles": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "description": "Product-defined role labels the identity holds (e.g. 'workspace-admin', 'viewer'). Descriptive; the product's authorization layer remains authoritative."
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Descriptive, non-secret attributes evaluators may filter or reason on (locale, seniority, plan tier, feature flags). MUST NOT contain credentials, tokens, or real personally identifiable information (AEP-REQ-144, AEP-REQ-145).",
+      "additionalProperties": true
+    },
+    "agentIds": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Agents this identity may be bound to. The literal '*' means every agent the caller is authorized to evaluate. Servers reject a binding outside this set with -32071 (AEP-REQ-148)."
+    },
+    "modes": {
+      "type": "array",
+      "items": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Evaluation modes in which this identity may be bound. An identity whose fixture must never be mutated omits 'sandboxed-live'."
+    },
+    "fixture": {
+      "$ref": "#/$defs/FixtureReference",
+      "description": "Seeded state behind the identity, when its behavior depends on any. Required for identities with seeded state (AEP-REQ-150)."
+    },
+    "maxConcurrentSessions": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "How many sessions may hold this identity at once. Identities with a per-session fixture reset are typically 1."
+    },
+    "status": {
+      "enum": ["available", "unavailable", "retired"],
+      "description": "'available' — may be bound now. 'unavailable' — exists and is applicable but cannot be bound now (reset in progress, at concurrency limit, maintenance); binding returns -32072. 'retired' — kept for Trace continuity; new bindings return -32072."
+    },
+    "statusReason": {"type": "string"},
+    "availableAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When an 'unavailable' identity is expected to become available, if known."
+    },
+    "lastUpdatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the identity document last changed. Drives the updatedSince filter."
+    }
+  },
+  "$defs": {
+    "FixtureReference": {
+      "type": "object",
+      "required": ["fixtureId", "version", "resetPolicy"],
+      "properties": {
+        "fixtureId": {"type": "string", "minLength": 1},
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Monotonic version string for the seeded state. Changes whenever the fixture content changes."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^(sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128})$",
+          "description": "Digest over a target-defined canonical serialization of the fixture state (AEP-REQ-150). Two bindings with equal digests saw equal state."
+        },
+        "resetPolicy": {
+          "enum": ["none", "per-session", "scheduled", "on-demand"],
+          "description": "'none' — fixture is never reset (read-only identities). 'per-session' — restored to 'version' before every binding. 'scheduled' — restored on a target-defined schedule. 'on-demand' — restored when the target chooses; the Trace snapshot records what was seen."
+        },
+        "description": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "IdentityBinding": {
+      "title": "IdentityBinding",
+      "description": "Snapshot of a test identity as resolved when a session bound it (AEP-REQ-149). Recorded on EvaluationSession.identity and Trace.identity. Carries no credentials (AEP-REQ-145).",
+      "type": "object",
+      "required": ["identityId", "kind", "boundAt"],
+      "properties": {
+        "identityId": {"type": "string", "minLength": 1},
+        "kind": {
+          "oneOf": [
+            {"enum": ["user", "service"]},
+            {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
+          ]
+        },
+        "tenancy": {
+          "type": "object",
+          "required": ["tenantId"],
+          "properties": {
+            "tenantId": {"type": "string", "minLength": 1},
+            "displayName": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "roles": {"type": "array", "items": {"type": "string"}},
+        "fixture": {
+          "type": "object",
+          "required": ["fixtureId", "version"],
+          "properties": {
+            "fixtureId": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1},
+            "digest": {
+              "type": "string",
+              "pattern": "^(sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128})$"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Fixture version and digest as observed at bind time; replay compares against these (AEP-REQ-151)."
+        },
+        "boundAt": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
