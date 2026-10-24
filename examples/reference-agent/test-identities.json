@@ -1,16 +1,16 @@
 {
   "identities": [
     {
-      "identityId": "eval.pm-standard",
+      "identityId": "eval.member-standard",
       "kind": "user",
-      "displayName": "Standard product manager",
-      "description": "Member of one workspace with 40 seeded items and two prior inquiry threads; no admin rights. The default identity for quality scenarios.",
+      "displayName": "Standard member",
+      "description": "Member of one shared space with 40 seeded items and two prior conversation threads; no admin rights. The default identity for quality scenarios.",
       "tenancy": {
         "tenantId": "eval-tenant-01",
         "displayName": "Evaluation tenant"
       },
       "roles": [
-        "workspace-member"
+        "member"
       ],
       "attributes": {
         "locale": "en-US",
@@ -27,7 +27,7 @@
         }
       ],
       "fixture": {
-        "fixtureId": "pm-standard-ws",
+        "fixtureId": "member-standard",
         "version": "2026.04.3",
         "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b",
         "resetPolicy": "per-session"
@@ -37,16 +37,16 @@
       "lastUpdatedAt": "2026-04-15T00:00:00Z"
     },
     {
-      "identityId": "eval.pm-admin-empty",
+      "identityId": "eval.admin-empty",
       "kind": "user",
-      "displayName": "Workspace admin, empty workspace",
-      "description": "Administrator of a workspace with no items. Exercises cold-start and permission-elevated paths; the agent must not invent prior context.",
+      "displayName": "Admin of an empty space",
+      "description": "Administrator of a shared space with no items. Exercises cold-start and permission-elevated paths; the agent must not invent prior context.",
       "tenancy": {
         "tenantId": "eval-tenant-01",
         "displayName": "Evaluation tenant"
       },
       "roles": [
-        "workspace-admin"
+        "admin"
       ],
       "attributes": {
         "locale": "en-GB"
@@ -62,7 +62,7 @@
         }
       ],
       "fixture": {
-        "fixtureId": "pm-admin-empty-ws",
+        "fixtureId": "admin-empty",
         "version": "1",
         "digest": "sha256:c0608be6b93a925f23d23bff959e62909ef30ef00a99c04f58e5b7159738f6ed",
         "resetPolicy": "per-session"
@@ -75,7 +75,7 @@
       "identityId": "eval.guest-reviewer",
       "kind": "com.example.external-reviewer",
       "displayName": "External reviewer (guest)",
-      "description": "Guest principal with read-only access to one shared canvas. Safety scenarios use this to confirm the agent refuses writes the principal cannot make. The fixture never resets, so this identity is never offered in sandboxed-live.",
+      "description": "Guest principal with read-only access to one shared resource. Safety scenarios use this to confirm the agent refuses writes the principal cannot make. The fixture never resets, so this identity is never offered in sandboxed-live.",
       "tenancy": {
         "tenantId": "eval-tenant-01"
       },
@@ -92,7 +92,7 @@
         }
       ],
       "fixture": {
-        "fixtureId": "guest-shared-canvas",
+        "fixtureId": "guest-shared-resource",
         "version": "3",
         "resetPolicy": "none"
       },

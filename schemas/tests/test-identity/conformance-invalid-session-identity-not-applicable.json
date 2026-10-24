@@ -9,14 +9,14 @@
     "type": "automated"
   },
   "identity": {
-    "identityId": "eval.pm-standard",
+    "identityId": "eval.member-standard",
     "kind": "user",
     "authorizationRef": "Q3m9VZ2rXkT1pLwa8NfYhBsc",
     "tenancy": {
       "tenantId": "eval-tenant-01"
     },
     "fixture": {
-      "fixtureId": "pm-standard-ws",
+      "fixtureId": "member-standard",
       "version": "2026.04.3",
       "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b"
     },

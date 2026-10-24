@@ -111,7 +111,7 @@
     "identity": {
       "binding": "required",
       "kinds": ["user", "com.example.external-reviewer"],
-      "description": "Reads the acting principal's workspace membership and prior inquiry threads; attributes every saved refinement to the acting principal. Accepts end users and external guest reviewers (a read-only custom kind the product recognizes); never acts as a default principal."
+      "description": "Reads the acting principal's memberships and prior conversation history; attributes every saved refinement to the acting principal. Accepts end users and external guest reviewers (a read-only custom kind the product recognizes); never acts as a default principal."
     },
     "historyModel": "linear",
     "maxHistoryTurns": 50

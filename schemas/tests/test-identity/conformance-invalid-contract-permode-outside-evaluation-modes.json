@@ -169,7 +169,7 @@
       "kinds": [
         "user"
       ],
-      "description": "Runs synthetically from injected context in blackbox through toolbox; calls the real agent against live sandbox-workspace state in sandboxed-live, where it must act as a known user."
+      "description": "Runs synthetically from injected context in blackbox through toolbox; calls the real agent against live sandbox state in sandboxed-live, where it must act as a known user."
     },
     "historyModel": "linear",
     "maxHistoryTurns": 50

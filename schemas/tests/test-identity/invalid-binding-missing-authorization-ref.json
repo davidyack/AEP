@@ -1,5 +1,5 @@
 {
-  "identityId": "eval.pm-standard",
+  "identityId": "eval.member-standard",
   "kind": "user",
   "tenancy": {
     "tenantId": "eval-tenant-01"

@@ -39,7 +39,7 @@
         "type": "string",
         "minLength": 1
       },
-      "description": "Product-defined role labels the identity holds (e.g. 'workspace-admin', 'viewer'). Descriptive; the product's authorization layer remains authoritative."
+      "description": "Product-defined role labels the identity holds (e.g. 'admin', 'viewer'). Descriptive; the product's authorization layer remains authoritative."
     },
     "attributes": {
       "type": "object",
@@ -133,7 +133,7 @@
         "tenantId": {
           "type": "string",
           "minLength": 1,
-          "description": "Evaluation tenant / workspace / organization the identity belongs to. MUST be an evaluation tenant, never a production tenant (AEP-REQ-086, AEP-REQ-130). Tenancy is not the isolation boundary between identities; the fixture is (AEP-REQ-150)."
+          "description": "The isolation scope the identity belongs to, as the target defines it (tenant, organization, account, project). MUST be an evaluation scope, never a production one (AEP-REQ-086, AEP-REQ-130). Tenancy is not the isolation boundary between identities; the fixture is (AEP-REQ-150)."
         },
         "displayName": {
           "type": "string"

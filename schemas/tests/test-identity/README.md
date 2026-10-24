@@ -42,7 +42,7 @@ Naming convention (as for [`../capabilities-registry/`](../capabilities-registry
   - `conformance-invalid-session-identity-not-applicable.json` is an
     `EvaluationSession` document (validate it against
     `evaluation-session.schema.json` with `test-identity.schema.json` as a
-    reference) whose bound identity, `eval.pm-standard`, is not applicable to the
+    reference) whose bound identity, `eval.member-standard`, is not applicable to the
     session's agent `example.release-notes` per the identity fixtures here.
     Applicability is a cross-document check at bind time (AEP-REQ-148 c).
 

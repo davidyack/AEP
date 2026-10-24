@@ -2,7 +2,7 @@
   "identityId": "eval.guest-reviewer",
   "kind": "com.example.external-reviewer",
   "displayName": "External reviewer (guest)",
-  "description": "Guest principal with read-only access to one shared canvas.",
+  "description": "Guest principal with read-only access to one shared resource.",
   "tenancy": {
     "tenantId": "eval-tenant-01"
   },
@@ -18,7 +18,7 @@
     }
   ],
   "fixture": {
-    "fixtureId": "guest-shared-canvas",
+    "fixtureId": "guest-shared-resource",
     "version": "3",
     "resetPolicy": "scheduled"
   },

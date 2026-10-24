@@ -1,7 +1,7 @@
 {
-  "identityId": "eval.pm-standard",
+  "identityId": "eval.member-standard",
   "kind": "user",
-  "displayName": "Standard product manager",
+  "displayName": "Standard member",
   "applicability": [
     {
       "agentId": "example.inquiry-assistant",

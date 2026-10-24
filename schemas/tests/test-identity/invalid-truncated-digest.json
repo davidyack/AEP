@@ -1,7 +1,7 @@
 {
-  "identityId": "eval.pm-standard",
+  "identityId": "eval.member-standard",
   "kind": "user",
-  "displayName": "Standard product manager",
+  "displayName": "Standard member",
   "applicability": [
     {
       "agentId": "example.inquiry-assistant",
@@ -15,7 +15,7 @@
   "status": "available",
   "lastUpdatedAt": "2026-04-15T00:00:00Z",
   "fixture": {
-    "fixtureId": "pm-standard-ws",
+    "fixtureId": "member-standard",
     "version": "2026.04.3",
     "digest": "sha256:9f2c",
     "resetPolicy": "per-session"

@@ -97,7 +97,7 @@ Pagination is cursor-based: use `nextCursor` from one response as `?cursor=` on 
 
 ## Step 1b — Discover the test identities you may act as
 
-The summary above carries `"identityBinding": { "binding": "required" }` with no per-mode overrides: the Inquiry Assistant reads the acting user's workspace in every mode, so every session must act as a principal the product knows. Before starting a session you need to know which synthetic principals the target has established for it (spec §8.2):
+The summary above carries `"identityBinding": { "binding": "required" }` with no per-mode overrides: the Inquiry Assistant reads the acting user's resources in every mode, so every session must act as a principal the product knows. Before starting a session you need to know which synthetic principals the target has established for it (spec §8.2):
 
 **REST**
 
@@ -119,16 +119,16 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
 {
   "identities": [
     {
-      "identityId": "eval.pm-standard",
+      "identityId": "eval.member-standard",
       "kind": "user",
-      "displayName": "Standard product manager",
-      "description": "Member of one workspace with 40 seeded items and two prior inquiry threads; no admin rights.",
+      "displayName": "Standard member",
+      "description": "Member of one shared space with 40 seeded items and two prior conversation threads; no admin rights.",
       "tenancy": { "tenantId": "eval-tenant-01" },
-      "roles": ["workspace-member"],
+      "roles": ["member"],
       "applicability": [
         { "agentId": "example.inquiry-assistant", "authorizedModes": ["blackbox", "graybox", "policybox"] }
       ],
-      "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3", "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b", "resetPolicy": "per-session" },
+      "fixture": { "fixtureId": "member-standard", "version": "2026.04.3", "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b", "resetPolicy": "per-session" },
       "maxConcurrentSessions": 1,
       "status": "available",
       "lastUpdatedAt": "2026-04-15T00:00:00Z"
@@ -139,13 +139,13 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
 }
 ```
 
-Two things to notice. The response contains no token, password, or cookie: you will *name* this identity at session start and the server will act as it — you never hold its credentials (AEP-REQ-145). And `applicability` is computed *for you*: each entry is an agent you may bind this identity to, with the modes in which you may do so — the intersection of what the target configured for the identity, what the agent supports, and what your credential may do. That is why the entry lists the same three modes your Step 1 summary showed as `authorizedModes`; another evaluator with `toolbox` rights would see four. This identity holds one session at a time, with the seeded workspace restored before each session (`resetPolicy: per-session`), and the slot is released the moment the session leaves `active`, expiry included. `replay` is never listed — replaying a Trace that recorded this identity is governed by the Trace, not by this list.
+Two things to notice. The response contains no token, password, or cookie: you will *name* this identity at session start and the server will act as it — you never hold its credentials (AEP-REQ-145). And `applicability` is computed *for you*: each entry is an agent you may bind this identity to, with the modes in which you may do so — the intersection of what the target configured for the identity, what the agent supports, and what your credential may do. That is why the entry lists the same three modes your Step 1 summary showed as `authorizedModes`; another evaluator with `toolbox` rights would see four. This identity holds one session at a time, with the seeded data restored before each session (`resetPolicy: per-session`), and the slot is released the moment the session leaves `active`, expiry included. `replay` is never listed — replaying a Trace that recorded this identity is governed by the Trace, not by this list.
 
 Only identities you are authorized to bind are listed. A server whose agents never act as a principal returns an empty list here, and its agents carry `identityBinding: { "binding": "none" }`.
 
 ### Sidebar — agents with a per-mode split
 
-Many product-embedded agents are not like the Inquiry Assistant. Their lower-mode adapter runs synthetically against the injected context and reads no live state at all; only `sandboxed-live` calls the real agent against a live sandbox workspace. For those, a principal matters in one mode and is meaningless in the rest, and the contract says so with a per-mode override (spec §8.2, AEP-REQ-146; the fragment is the fixture [`valid-identity-model-permode-split.json`](../schemas/tests/test-identity/valid-identity-model-permode-split.json)):
+Many product-embedded agents are not like the Inquiry Assistant. Their lower-mode adapter runs synthetically against the injected context and reads no live state at all; only `sandboxed-live` calls the real agent against live sandbox state. For those, a principal matters in one mode and is meaningless in the rest, and the contract says so with a per-mode override (spec §8.2, AEP-REQ-146; the fragment is the fixture [`valid-identity-model-permode-split.json`](../schemas/tests/test-identity/valid-identity-model-permode-split.json)):
 
 ```json
 "identity": {
@@ -160,7 +160,7 @@ A graybox session against such an agent binds nothing — supplying an `identity
 ```json
 { "jsonrpc": "2.0", "id": 3, "method": "aep.session.start",
   "params": { "agentId": "example.permode-split", "testMode": "graybox",
-              "injectedContext": { "user": { "role": "product-manager" } }, "ttlSeconds": 900 } }
+              "injectedContext": { "user": { "role": "customer" } }, "ttlSeconds": 900 } }
 ```
 
 ```json
@@ -168,19 +168,19 @@ A graybox session against such an agent binds nothing — supplying an `identity
   "testMode": "graybox", "state": "active", "createdAt": "2026-04-17T12:00:00Z", "expiresAt": "2026-04-17T12:15:00Z" }
 ```
 
-A `sandboxed-live` session against the same agent must bind one — omitting `identityId` is `-32071` — so Step 1b comes first, filtered to the mode that needs it (`GET /aep/identities?agent=example.permode-split&mode=sandboxed-live`), and the start names what it returned:
+A `sandboxed-live` session against the same agent must bind one — omitting `identityId` is `-32071` — so Step 1b comes first, filtered to the mode that needs it (`GET /aep/identities?agent=example.permode-split&mode=sandboxed-live`). The Inquiry Assistant's identities are not applicable here; this agent has its own, `eval.ops-sandbox`, established for it with a per-session fixture, and the start names it:
 
 ```json
 { "jsonrpc": "2.0", "id": 4, "method": "aep.session.start",
-  "params": { "agentId": "example.permode-split", "testMode": "sandboxed-live", "identityId": "eval.pm-admin-empty",
-              "injectedContext": { "user": { "role": "product-manager" } }, "ttlSeconds": 900 } }
+  "params": { "agentId": "example.permode-split", "testMode": "sandboxed-live", "identityId": "eval.ops-sandbox",
+              "injectedContext": { "user": { "role": "customer" } }, "ttlSeconds": 900 } }
 ```
 
 ```json
 { "sessionId": "sess_t1u2v3", "agentId": "example.permode-split", "agentVersion": "2.0.0",
   "testMode": "sandboxed-live",
-  "identity": { "identityId": "eval.pm-admin-empty", "kind": "user", "tenancy": { "tenantId": "eval-tenant-01" },
-                "roles": ["workspace-admin"], "fixture": { "fixtureId": "pm-admin-empty-ws", "version": "1" },
+  "identity": { "identityId": "eval.ops-sandbox", "kind": "user", "tenancy": { "tenantId": "eval-tenant-01" },
+                "roles": ["editor"], "fixture": { "fixtureId": "ops-sandbox", "version": "1" },
                 "authorizationRef": "mXk2Ltq9ZvR4bN7wPc1sYdHe", "boundAt": "2026-04-17T12:01:00Z" },
   "state": "active", "createdAt": "2026-04-17T12:01:00Z", "expiresAt": "2026-04-17T12:16:00Z" }
 ```
@@ -257,7 +257,7 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
      -d '{
        "agentId": "example.inquiry-assistant",
        "testMode": "graybox",
-       "identityId": "eval.pm-standard",
+       "identityId": "eval.member-standard",
        "injectedContext": {
          "user": { "role": "product-manager", "tenureMonths": 18, "priorInteractions": 5 },
          "history": [],
@@ -275,7 +275,7 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
   "params": {
     "agentId": "example.inquiry-assistant",
     "testMode": "graybox",
-    "identityId": "eval.pm-standard",
+    "identityId": "eval.member-standard",
     "injectedContext": { "...": "..." },
     "ttlSeconds": 900
   }
@@ -291,11 +291,11 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
   "agentVersion": "1.2.0",
   "testMode": "graybox",
   "identity": {
-    "identityId": "eval.pm-standard",
+    "identityId": "eval.member-standard",
     "kind": "user",
     "tenancy": { "tenantId": "eval-tenant-01" },
-    "roles": ["workspace-member"],
-    "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3", "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b" },
+    "roles": ["member"],
+    "fixture": { "fixtureId": "member-standard", "version": "2026.04.3", "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b" },
     "authorizationRef": "Q3m9VZ2rXkT1pLwa8NfYhBsc",
     "boundAt": "2026-04-17T12:00:00Z"
   },
@@ -305,9 +305,9 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
 }
 ```
 
-The session is now `active`. Internally, the server validated the identity binding (right agent, right mode, available), restored the `pm-standard-ws` fixture to version `2026.04.3`, established the acting principal, created the session record, recorded the initial `created` state, and completed the `created -> active` transition before returning success. The `identity` snapshot is fixed for the session and will appear on the Trace — it is how the principal, which influences every turn, stays visible to replay (AEP-REQ-149). Its `authorizationRef` points at the server's audit record of the decision that let *your* credential bind *this* identity; the Trace carries the pointer, never your token or scope. You can now run turns or scenarios.
+The session is now `active`. Internally, the server validated the identity binding (right agent, right mode, available), restored the `member-standard` fixture to version `2026.04.3`, established the acting principal, created the session record, recorded the initial `created` state, and completed the `created -> active` transition before returning success. The `identity` snapshot is fixed for the session and will appear on the Trace — it is how the principal, which influences every turn, stays visible to replay (AEP-REQ-149). Its `authorizationRef` points at the server's audit record of the decision that let *your* credential bind *this* identity; the Trace carries the pointer, never your token or scope. You can now run turns or scenarios.
 
-Had you omitted `identityId`, the server would have answered `-32071 identity_binding_invalid`; had you named an identity scoped to another agent, or a `service` identity where the contract's `kinds` lists only `user`, the same; had `eval.pm-standard` been mid-reset or already held by another session, `-32072 identity_unavailable` with a `retryAfterMs`; had it been retired, `-32071` again, because that never clears. The checks run in a fixed order — agent, then identity existence, then binding shape, then availability — so the error you get never tells you whether something you were not allowed to see exists.
+Had you omitted `identityId`, the server would have answered `-32071 identity_binding_invalid`; had you named an identity scoped to another agent, or a `service` identity where the contract's `kinds` lists only `user`, the same; had `eval.member-standard` been mid-reset or already held by another session, `-32072 identity_unavailable` with a `retryAfterMs`; had it been retired, `-32071` again, because that never clears. The checks run in a fixed order — agent, then identity existence, then binding shape, then availability — so the error you get never tells you whether something you were not allowed to see exists.
 
 ---
 
