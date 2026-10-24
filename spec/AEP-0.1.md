@@ -331,7 +331,7 @@ GET  /aep/identities/{identityId}     → TestIdentity
 
 | Parameter | Matches | Example |
 |-----------|---------|---------|
-| `agent` | identity is applicable to this `agentId` (§8.2) and the caller is authorized to evaluate that agent | `agent=example.inquiry-assistant` |
+| `agent` | identity is applicable to this `agentId` (§8.2: `agentIds` covers it and `kind` is one the agent's contract accepts) and the caller is authorized to evaluate that agent | `agent=example.inquiry-assistant` |
 | `mode` | caller may bind the identity for a fresh session in this live mode (`replay` is governed by the Trace, not this list; §8.2) | `mode=sandboxed-live` |
 | `kind` | identity kind | `kind=user` |
 | `tenant` | `tenancy.tenantId` | `tenant=eval-tenant-01` |
@@ -550,17 +550,19 @@ A **test identity** is a synthetic principal that the target (the organization o
 
 An agent may legitimately use all three in one session. A test identity is bound by reference because its substance is server-side state — accounts, memberships, seeded records — that cannot be posted in a request body and must not be fabricated by the client.
 
+A test identity is **applicable** to an agent when both hold: the identity's `agentIds` covers the agent, and the identity's `kind` is one the agent's contract accepts — any kind when `contextModel.identity.kinds` is absent, otherwise a member of that list. Applicability is checked in the same two places and from the same two documents: the `agent` discovery filter (AEP-REQ-142) and the bind (AEP-REQ-148).
+
 **AEP-REQ-144**: Every test identity MUST conform to [`../schemas/test-identity.schema.json`](../schemas/test-identity.schema.json) and MUST be established by the target in the evaluation environment. A test identity MUST be synthetic: it MUST NOT be, be derived from, or share credentials with any real person's production account, and its document MUST NOT carry real personally identifiable information. Fixture data behind a test identity MUST satisfy the same constraint.
 
 **AEP-REQ-145**: No credential for a test identity crosses the AEP surface. `TestIdentity` documents, discovery responses, session records, Traces, and streaming events MUST NOT contain the identity's tokens, passwords, cookies, keys, or any other secret material, and servers MUST NOT issue the identity's product credentials to an evaluator through any AEP method. Binding is a server-side act: at session start the server establishes the acting principal itself, authorized by the *evaluator's* credential and the identity's declared applicability. Nothing in AEP conveys a test identity's credentials to an evaluator; whether the identity can be exercised outside AEP at all is a property of the target's deployment, which AEP-REQ-130 already requires to keep evaluation and production credentials audience-separated.
 
 **AEP-REQ-146**: `contextModel.identity.binding` in an Agent Contract takes one of `none`, `optional`, or `required`, and an absent field means `none`. An agent whose turn behavior depends on an acting principal — authorization checks, per-principal data access, writes attributed to a user — MUST declare `optional` or `required`, and MUST NOT act as an ambient or default principal when no identity is bound. Declaring `none` is an assertion that the agent's behavior is fully determined by its input and injected context.
 
-**AEP-REQ-147**: For every agent whose contract declares `binding: "required"`, the server MUST establish at least one test identity whose `agentIds` covers that agent, in at least one mode the agent supports. An agent with `required` binding and no applicable identity is not evaluable, and a server that lists it is non-compliant.
+**AEP-REQ-147**: For every agent whose contract declares `binding: "required"`, the server MUST establish at least one applicable test identity (§8.2: `agentIds` covers the agent and `kind` is one the contract accepts) in at least one mode the agent supports. An agent with `required` binding and no applicable identity is not evaluable, and a server that lists it is non-compliant.
 
 **AEP-REQ-148**: At `POST /aep/sessions` / `aep.session.start`, servers MUST validate the identity binding before the `created → active` transition and reject with:
   (a) `-32071 identity_binding_invalid` when `identityId` is supplied for an agent declaring `none`, or absent for an agent declaring `required`;
-  (b) `-32071 identity_binding_invalid` when, for this caller, the identity's `agentIds` does not cover the agent or its `authorizedModes` does not include the requested `testMode`. `replay` is exempt from the mode check: a replay of a Trace that recorded this identity is always permitted as far as the identity is concerned (AEP-REQ-151), and is authorized by the Trace's captured mode under AEP-REQ-046. `authorizedModes` governs what an evaluator may request fresh, not what may be replayed;
+  (b) `-32071 identity_binding_invalid` when the identity is not applicable to the agent (§8.2) — its `agentIds` does not cover the agent, or its `kind` is not one the agent's `contextModel.identity.kinds` accepts — or when, for this caller, its `authorizedModes` does not include the requested `testMode`. `replay` is exempt from the mode check: a replay of a Trace that recorded this identity is always permitted as far as the identity is concerned (AEP-REQ-151), and is authorized by the Trace's captured mode under AEP-REQ-046. `authorizedModes` governs what an evaluator may request fresh, not what may be replayed;
   (c) `-32070 identity_not_found` when the identity does not exist or the caller is not authorized to bind it (existence-hiding, as AEP-REQ-143);
   (d) `-32072 identity_unavailable` when the identity exists and is applicable but cannot be bound now — its `status` is not `available`, a fixture reset is in progress, or binding would exceed `maxConcurrentSessions`. `data.retryAfterMs` MUST be populated when the server can estimate availability.
 

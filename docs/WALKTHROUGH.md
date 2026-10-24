@@ -262,7 +262,7 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
 
 The session is now `active`. Internally, the server validated the identity binding (right agent, right mode, available), restored the `pm-standard-ws` fixture to version `2026.04.3`, established the acting principal, created the session record, recorded the initial `created` state, and completed the `created -> active` transition before returning success. The `identity` snapshot is fixed for the session and will appear on the Trace — it is how the principal, which influences every turn, stays visible to replay (AEP-REQ-149). Its `authorizationRef` points at the server's audit record of the decision that let *your* credential bind *this* identity; the Trace carries the pointer, never your token or scope. You can now run turns or scenarios.
 
-Had you omitted `identityId`, the server would have answered `-32071 identity_binding_invalid`; had you named an identity scoped to another agent, the same; had `eval.pm-standard` been mid-reset or already held by another session, `-32072 identity_unavailable` with a `retryAfterMs`.
+Had you omitted `identityId`, the server would have answered `-32071 identity_binding_invalid`; had you named an identity scoped to another agent, or a `service` identity where the contract's `kinds` lists only `user`, the same; had `eval.pm-standard` been mid-reset or already held by another session, `-32072 identity_unavailable` with a `retryAfterMs`.
 
 ---
 

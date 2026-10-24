@@ -78,7 +78,7 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-027 | Discovery supports updatedSince for incremental sync; summaries carry lastUpdatedAt | §7.1 |
 | AEP-REQ-028 | Unauthorized GET /agents/{id} returns -32001, not -32010 | §7.1 |
 | AEP-REQ-141 | Implement GET /aep/identities with pagination; list only identities the caller may bind, with agentIds/authorizedModes computed per caller | §7.1 |
-| AEP-REQ-142 | Identity discovery supports agent/mode/kind/tenant/status/q/updatedSince filters; rejects unknown ones | §7.1 |
+| AEP-REQ-142 | Identity discovery supports agent/mode/kind/tenant/status/q/updatedSince filters; agent filter applies applicability (coverage + kind); rejects unknown ones | §7.1 |
 | AEP-REQ-143 | Unauthorized GET /identities/{id} returns -32070, not -32010 | §7.1 |
 | AEP-REQ-035 | Supply injectedContext at session start | §8 |
 | AEP-REQ-036 | Validate injected context; -32040 on mismatch | §8 |
@@ -86,7 +86,7 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-144 | Test identities are synthetic, target-established, and carry no real PII | §8.2 |
 | AEP-REQ-145 | No identity credential crosses the AEP surface; binding is server-side under the evaluator's authorization | §8.2 |
 | AEP-REQ-147 | At least one applicable identity exists for every agent with required binding | §8.2 |
-| AEP-REQ-148 | Validate identity binding at session start; -32070 / -32071 / -32072; replay exempt from the mode check | §8.2 |
+| AEP-REQ-148 | Validate identity binding at session start (agent coverage, kind accepted by the contract, caller mode); -32070 / -32071 / -32072; replay exempt from the mode check | §8.2 |
 | AEP-REQ-149 | Identity fixed for session lifetime; snapshot with authorizationRef on EvaluationSession.identity, Trace.identity and session.started | §8.2 |
 | AEP-REQ-150 | Fixture declares version + resetPolicy; per-session reset and concurrency honored; no cross-identity leakage | §8.2 |
 | AEP-REQ-151 | Replay rebinds the same identity and compares fixture version/digest; no byte-identity claim across mismatch | §8.2 |

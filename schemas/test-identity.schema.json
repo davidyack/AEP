@@ -48,7 +48,7 @@
       "items": {"type": "string", "minLength": 1},
       "minItems": 1,
       "uniqueItems": true,
-      "description": "Agents the CALLING IDENTITY may bind this identity to: the intersection of the identity's declared applicability and the caller's agent authorization (AEP-REQ-141). Computed per caller so the list never names an agent the caller cannot see. The literal '*' means every agent the caller is authorized to evaluate. Servers reject a binding outside this set with -32071 (AEP-REQ-148)."
+      "description": "Agents the CALLING IDENTITY may bind this identity to: the intersection of the identity's declared applicability and the caller's agent authorization (AEP-REQ-141). Computed per caller so the list never names an agent the caller cannot see. The literal '*' means every agent the caller is authorized to evaluate. Covering an agent is half of applicability; the other half is that the agent's contract accepts this identity's kind (contextModel.identity.kinds, spec §8.2). Servers reject a binding that fails either with -32071 (AEP-REQ-148)."
     },
     "authorizedModes": {
       "type": "array",

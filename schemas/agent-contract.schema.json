@@ -160,7 +160,7 @@
           },
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Identity kinds the agent can act as. Absent means any kind."
+          "description": "Identity kinds the agent can act as. Absent means any kind. Part of applicability (spec §8.2): the agent discovery filter omits identities of other kinds (AEP-REQ-142) and a bind with one is rejected with -32071 (AEP-REQ-148 b)."
         },
         "description": {
           "type": "string",
