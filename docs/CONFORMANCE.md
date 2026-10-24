@@ -89,7 +89,7 @@ A server is AEP-compliant when every requirement in this section is satisfied.
 | AEP-REQ-148 | Validate identity binding at session start (agent coverage, kind accepted by the contract, caller mode); -32070 / -32071 / -32072; replay exempt from the mode check | §8.2 |
 | AEP-REQ-149 | Identity fixed for session lifetime; snapshot with authorizationRef on EvaluationSession.identity, Trace.identity and session.started | §8.2 |
 | AEP-REQ-150 | Fixture declares version + resetPolicy; per-session reset and concurrency honored; no cross-identity leakage | §8.2 |
-| AEP-REQ-151 | Replay rebinds the same identity and compares fixture version/digest; no byte-identity claim across mismatch | §8.2 |
+| AEP-REQ-151 | Trace-faithful playback never touches the identity; re-execution rebinds the same identity and compares fixture version/digest, no byte-identity claim across mismatch | §8.2 |
 | AEP-REQ-153 | Audit-log identity bindings, rejections, and fixture resets | §8.2 |
 | AEP-REQ-040 | Reject unsupported modes with -32003 | §9 |
 | AEP-REQ-041 | Enforce mode visibility boundaries | §9 |
