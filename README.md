@@ -31,7 +31,7 @@ Required core (every compliant implementation):
 - **Context injection** so tests are reproducible
 - **Execution model** specifying when scenarios complete and how scoring fires
 - **Trace production** for every session, sealed and replayable
-- **22 standardised error codes** with retry semantics
+- **21 standardised error codes** with retry semantics
 - **Enforced security model**: auth, authorization, rate limits, isolation
 - **Conformance declaration** at `/.well-known/aep-compliance.json`
 

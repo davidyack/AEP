@@ -3,7 +3,7 @@
   "kind": "user",
   "displayName": "Standard product manager",
   "agentIds": ["example.inquiry-assistant"],
-  "modes": ["blackbox"],
+  "authorizedModes": ["blackbox"],
   "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3" },
   "status": "available",
   "lastUpdatedAt": "2026-04-15T00:00:00Z"

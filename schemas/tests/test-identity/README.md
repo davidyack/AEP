@@ -16,6 +16,12 @@ Naming convention (as for [`../capabilities-registry/`](../capabilities-registry
     structurally. The schema closes every *named* slot a credential could occupy
     (`additionalProperties: false`), but cannot judge the content of a free-form
     attribute; contract validation MUST.
+  - `invalid-replay-in-authorized-modes.json` lists `replay` in `authorizedModes`; the
+    enum excludes it on purpose, because replay of a recorded identity is governed
+    by the Trace (AEP-REQ-148, AEP-REQ-151), not by the fresh-session list.
+  - `invalid-binding-missing-authorization-ref.json` is an `IdentityBinding`
+    snapshot without `authorizationRef`; validate it against
+    `$defs/IdentityBinding`, as the command below does for the conformance case.
   - `conformance-invalid-binding-snapshot-wrong-agent.json` is an
     `IdentityBinding` snapshot (the `$defs/IdentityBinding` shape recorded on
     `EvaluationSession.identity` / `Trace.identity`) that is structurally valid;

@@ -64,6 +64,7 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
       "supportedModes": ["blackbox", "graybox", "policybox", "toolbox", "replay"],
       "authorizedModes": ["blackbox", "graybox", "policybox"],
       "supportedExtensions": ["policy-profile", "deterministic-replay"],
+      "identityBinding": "required",
       "lastUpdatedAt": "2026-04-15T00:00:00Z"
     }
   ],
@@ -96,7 +97,7 @@ Pagination is cursor-based: use `nextCursor` from one response as `?cursor=` on 
 
 ## Step 1b — Discover the test identities you may act as
 
-The summary above would also carry `"identityBinding": "required"` for an agent that acts on behalf of a principal — the Inquiry Assistant reads the acting user's workspace, so it does. Before starting a session you need to know which synthetic principals the target has established for it (spec §8.2):
+The summary above carries `"identityBinding": "required"`: the Inquiry Assistant reads the acting user's workspace, so every session must act as a principal the product knows. Before starting a session you need to know which synthetic principals the target has established for it (spec §8.2):
 
 **REST**
 
@@ -125,7 +126,7 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
       "tenancy": { "tenantId": "eval-tenant-01" },
       "roles": ["workspace-member"],
       "agentIds": ["example.inquiry-assistant"],
-      "modes": ["blackbox", "graybox", "policybox", "toolbox"],
+      "authorizedModes": ["blackbox", "graybox", "policybox", "toolbox"],
       "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3", "digest": "sha256:9f2c…", "resetPolicy": "per-session" },
       "maxConcurrentSessions": 1,
       "status": "available",
@@ -137,7 +138,7 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
 }
 ```
 
-Two things to notice. The response contains no token, password, or cookie: you will *name* this identity at session start and the server will act as it — you never hold its credentials (AEP-REQ-145). And the identity is scoped: it may be bound to this agent only, in the listed modes only, one session at a time, with the seeded workspace restored before each session (`resetPolicy: per-session`).
+Two things to notice. The response contains no token, password, or cookie: you will *name* this identity at session start and the server will act as it — you never hold its credentials (AEP-REQ-145). And the identity is scoped *to you*: `agentIds` and `authorizedModes` are the intersection of what the target configured for the identity and what your credential may do, so another evaluator may see a different list for the same identity. This one may be bound to this agent only, in four live modes, one session at a time, with the seeded workspace restored before each session (`resetPolicy: per-session`). `replay` is never listed — replaying a Trace that recorded this identity is governed by the Trace, not by this list.
 
 Only identities you are authorized to bind are listed. A server whose agents never act as a principal returns an empty list here, and its agents carry `identityBinding: "none"`.
 
@@ -250,6 +251,7 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
     "tenancy": { "tenantId": "eval-tenant-01" },
     "roles": ["workspace-member"],
     "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3", "digest": "sha256:9f2c…" },
+    "authorizationRef": "YXV0aHpfYTFiMmMzZDRlNWY2Nzg5MA",
     "boundAt": "2026-04-17T12:00:00Z"
   },
   "state": "active",
@@ -258,7 +260,7 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
 }
 ```
 
-The session is now `active`. Internally, the server validated the identity binding (right agent, right mode, available), restored the `pm-standard-ws` fixture to version `2026.04.3`, established the acting principal, created the session record, recorded the initial `created` state, and completed the `created -> active` transition before returning success. The `identity` snapshot is fixed for the session and will appear on the Trace — it is how the principal, which influences every turn, stays visible to replay (AEP-REQ-149). You can now run turns or scenarios.
+The session is now `active`. Internally, the server validated the identity binding (right agent, right mode, available), restored the `pm-standard-ws` fixture to version `2026.04.3`, established the acting principal, created the session record, recorded the initial `created` state, and completed the `created -> active` transition before returning success. The `identity` snapshot is fixed for the session and will appear on the Trace — it is how the principal, which influences every turn, stays visible to replay (AEP-REQ-149). Its `authorizationRef` points at the server's audit record of the decision that let *your* credential bind *this* identity; the Trace carries the pointer, never your token or scope. You can now run turns or scenarios.
 
 Had you omitted `identityId`, the server would have answered `-32071 identity_binding_invalid`; had you named an identity scoped to another agent, the same; had `eval.pm-standard` been mid-reset or already held by another session, `-32072 identity_unavailable` with a `retryAfterMs`.
 
@@ -435,7 +437,7 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
      https://eval.example.com/aep/traces/trace_k1l2m3
 ```
 
-The Trace contains every turn's input and output, timestamps, the full injected context snapshot, and any tool calls or policy events appropriate to the session's mode. It is sealed and immutable.
+The Trace contains every turn's input and output, timestamps, the full injected context snapshot, the identity snapshot from Step 3 (including the fixture version and digest the session actually ran against), and any tool calls or policy events appropriate to the session's mode. It is sealed and immutable.
 
 ---
 

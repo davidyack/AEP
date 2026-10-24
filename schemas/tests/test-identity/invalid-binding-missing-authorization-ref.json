@@ -1,0 +1,8 @@
+{
+  "identityId": "eval.pm-standard",
+  "kind": "user",
+  "tenancy": {
+    "tenantId": "eval-tenant-01"
+  },
+  "boundAt": "2026-04-17T12:00:00Z"
+}

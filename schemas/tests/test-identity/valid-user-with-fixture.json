@@ -7,7 +7,7 @@
   "roles": ["workspace-member"],
   "attributes": { "locale": "en-US", "seniority": "mid" },
   "agentIds": ["example.inquiry-assistant"],
-  "modes": ["blackbox", "graybox", "policybox", "toolbox"],
+  "authorizedModes": ["blackbox", "graybox", "policybox", "toolbox"],
   "fixture": {
     "fixtureId": "pm-standard-ws",
     "version": "2026.04.3",

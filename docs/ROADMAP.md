@@ -14,7 +14,7 @@ Working document. Priorities reflect current understanding; order is a signal, n
 - Required traceability contract
 - Normative determinism and replay requirements
 - Red-teaming interface
-- 19 standardised error codes
+- 18 standardised error codes
 - Threat model, security model, scoring framing, replay framing, error handling
 
 ## v0.2 (next)

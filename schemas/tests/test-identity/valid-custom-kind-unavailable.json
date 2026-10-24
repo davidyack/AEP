@@ -6,7 +6,7 @@
   "tenancy": { "tenantId": "eval-tenant-01" },
   "roles": ["guest"],
   "agentIds": ["example.inquiry-assistant"],
-  "modes": ["blackbox"],
+  "authorizedModes": ["blackbox"],
   "fixture": { "fixtureId": "guest-shared-canvas", "version": "3", "resetPolicy": "scheduled" },
   "status": "unavailable",
   "statusReason": "Fixture reset in progress",

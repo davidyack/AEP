@@ -4,7 +4,7 @@
   "title": "TestIdentity",
   "description": "A synthetic principal the target establishes in its evaluation environment so an agent can act as a known user or service during evaluation (spec §8.2). Returned by GET /aep/identities and GET /aep/identities/{identityId}. Evaluators discover identities and bind one at session start by identityId; they never create them and never receive the identity's credentials (AEP-REQ-145). The document is descriptive: additionalProperties is false so no credential-shaped field can be added, and 'attributes' MUST NOT carry secrets or real PII (AEP-REQ-144).",
   "type": "object",
-  "required": ["identityId", "kind", "displayName", "agentIds", "modes", "status", "lastUpdatedAt"],
+  "required": ["identityId", "kind", "displayName", "agentIds", "authorizedModes", "status", "lastUpdatedAt"],
   "properties": {
     "identityId": {
       "type": "string",
@@ -48,14 +48,14 @@
       "items": {"type": "string", "minLength": 1},
       "minItems": 1,
       "uniqueItems": true,
-      "description": "Agents this identity may be bound to. The literal '*' means every agent the caller is authorized to evaluate. Servers reject a binding outside this set with -32071 (AEP-REQ-148)."
+      "description": "Agents the CALLING IDENTITY may bind this identity to: the intersection of the identity's declared applicability and the caller's agent authorization (AEP-REQ-141). Computed per caller so the list never names an agent the caller cannot see. The literal '*' means every agent the caller is authorized to evaluate. Servers reject a binding outside this set with -32071 (AEP-REQ-148)."
     },
-    "modes": {
+    "authorizedModes": {
       "type": "array",
-      "items": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
+      "items": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live"]},
       "minItems": 1,
       "uniqueItems": true,
-      "description": "Evaluation modes in which this identity may be bound. An identity whose fixture must never be mutated omits 'sandboxed-live'."
+      "description": "Live evaluation modes in which the CALLING IDENTITY may bind this identity for a fresh session: the intersection of the identity's declared applicability and the caller's mode authorization, as authorizedModes on AgentSummary (AEP-REQ-026, AEP-REQ-141). 'replay' is deliberately not listable: replaying a Trace that recorded this identity is governed by the Trace's mode and AEP-REQ-046, not by this list (AEP-REQ-148, AEP-REQ-151). An identity whose fixture must never be mutated omits 'sandboxed-live'."
     },
     "fixture": {
       "$ref": "#/$defs/FixtureReference",
@@ -109,11 +109,16 @@
     },
     "IdentityBinding": {
       "title": "IdentityBinding",
-      "description": "Snapshot of a test identity as resolved when a session bound it (AEP-REQ-149). Recorded on EvaluationSession.identity and Trace.identity. Carries no credentials (AEP-REQ-145).",
+      "description": "Snapshot of a test identity as resolved when a session bound it (AEP-REQ-149). Recorded on EvaluationSession.identity and Trace.identity, and carried whole on the session.started stream event so Trace reconstruction from the stream stays lossless (AEP-REQ-114). tenancy, roles and fixture are present whenever the bound identity carries them. Carries no credentials (AEP-REQ-145).",
       "type": "object",
-      "required": ["identityId", "kind", "boundAt"],
+      "required": ["identityId", "kind", "authorizationRef", "boundAt"],
       "properties": {
         "identityId": {"type": "string", "minLength": 1},
+        "authorizationRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{22,128}$",
+          "description": "Opaque, high-entropy reference (AEP-REQ-126) to the audit record of the authorization decision that permitted this binding — which evaluator credential, under which scope, at what time (AEP-REQ-090, AEP-REQ-153). Joins the snapshot to the server's audit log without putting the evaluator's credential or scope on the Trace."
+        },
         "kind": {
           "oneOf": [
             {"enum": ["user", "service"]},
@@ -129,7 +134,7 @@
           },
           "additionalProperties": false
         },
-        "roles": {"type": "array", "items": {"type": "string"}},
+        "roles": {"type": "array", "items": {"type": "string", "minLength": 1}},
         "fixture": {
           "type": "object",
           "required": ["fixtureId", "version"],

@@ -60,7 +60,7 @@
             "agentId": {"type": "string"},
             "agentVersion": {"type": "string"},
             "testMode": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
-            "identityId": {"type": "string", "description": "Test identity bound to the session, when any (spec §8.2). Only the handle; the full snapshot is on the Trace."},
+            "identity": {"$ref": "./test-identity.schema.json#/$defs/IdentityBinding", "description": "Full identity snapshot when the session bound a test identity (spec §8.2, AEP-REQ-149) — the same object as Trace.identity, carried whole so the sealed Trace is reconstructible from the stream alone (AEP-REQ-114)."},
             "startedAt": {"type": "string", "format": "date-time"}
           }
         }
