@@ -2,20 +2,36 @@
   "identityId": "eval.pm-standard",
   "kind": "user",
   "displayName": "Standard product manager",
+  "applicability": [
+    {
+      "agentId": "example.inquiry-assistant",
+      "authorizedModes": [
+        "blackbox",
+        "graybox",
+        "policybox"
+      ]
+    }
+  ],
+  "status": "available",
+  "lastUpdatedAt": "2026-04-15T00:00:00Z",
   "description": "Member of one workspace with 40 seeded items; no admin rights.",
-  "tenancy": { "tenantId": "eval-tenant-01", "displayName": "Evaluation tenant" },
-  "roles": ["workspace-member"],
-  "attributes": { "locale": "en-US", "seniority": "mid" },
-  "agentIds": ["example.inquiry-assistant"],
-  "authorizedModes": ["blackbox", "graybox", "policybox", "toolbox"],
+  "tenancy": {
+    "tenantId": "eval-tenant-01",
+    "displayName": "Evaluation tenant"
+  },
+  "roles": [
+    "workspace-member"
+  ],
+  "attributes": {
+    "locale": "en-US",
+    "seniority": "mid"
+  },
   "fixture": {
     "fixtureId": "pm-standard-ws",
     "version": "2026.04.3",
-    "digest": "sha256:9f2c1a7e4b8d3c6f0a1b2c3d4e5f60718293a4b5c6d7e8f901a2b3c4d5e6f708",
+    "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b",
     "resetPolicy": "per-session",
     "description": "One workspace, 40 items, two prior inquiry threads."
   },
-  "maxConcurrentSessions": 1,
-  "status": "available",
-  "lastUpdatedAt": "2026-04-15T00:00:00Z"
+  "maxConcurrentSessions": 1
 }

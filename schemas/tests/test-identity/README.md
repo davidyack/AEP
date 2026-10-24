@@ -7,26 +7,32 @@ Positive and negative fixtures for
 Naming convention (as for [`../capabilities-registry/`](../capabilities-registry/)):
 
 - `valid-*.json` — MUST pass schema validation.
-- `invalid-*.json` — MUST fail schema validation.
+- `invalid-*.json` — MUST fail schema validation. Two of them target the
+  `$defs/IdentityBinding` subschema rather than the document root:
+  `invalid-binding-missing-authorization-ref.json`. The rest fail at the root:
+  a credential-shaped top-level field, a credential-like `attributes` property
+  name (`sessionCookie`; the `propertyNames` deny pattern), empty
+  `applicability`, a fixture without `resetPolicy`, an unknown or `replay`
+  mode in `authorizedModes`, a non-reverse-DNS custom kind, `availableAt` on
+  an `available` identity, and a truncated digest.
 - `conformance-invalid-*.json` — passes portable schema validation but violates a
   normative requirement that JSON Schema cannot express. A conformance suite, not
   the schema, rejects these:
   - `conformance-invalid-attributes-carry-secret.json` violates AEP-REQ-145:
-    `attributes` is an open object, so a token placed there validates
-    structurally. The schema closes every *named* slot a credential could occupy
-    (`additionalProperties: false`), but cannot judge the content of a free-form
-    attribute; contract validation MUST.
-  - `invalid-replay-in-authorized-modes.json` lists `replay` in `authorizedModes`; the
-    enum excludes it on purpose, because replay of a recorded identity is governed
-    by the Trace (AEP-REQ-148, AEP-REQ-151), not by the fresh-session list.
-  - `invalid-binding-missing-authorization-ref.json` is an `IdentityBinding`
-    snapshot without `authorizationRef`; validate it against
-    `$defs/IdentityBinding`, as the command below does for the conformance case.
-  - `conformance-invalid-binding-snapshot-wrong-agent.json` is an
-    `IdentityBinding` snapshot (the `$defs/IdentityBinding` shape recorded on
-    `EvaluationSession.identity` / `Trace.identity`) that is structurally valid;
-    whether the bound identity's `agentIds` covered the session's agent is a
-    server-side check at bind time (AEP-REQ-148 b), not a schema property.
+    the property name (`note`) is innocuous, so the deny pattern cannot help, and
+    only the value is a credential. Content is contract validation's job.
+  - `conformance-invalid-duplicate-agent-entries.json` has two `applicability`
+    entries for the same agent (AEP-REQ-141 requires distinct `agentId`s);
+    cross-item uniqueness on one property is not portable schema.
+  - `conformance-invalid-none-reset-in-sandboxed-live.json` lists
+    `sandboxed-live` for an identity whose fixture has `resetPolicy: none`
+    (AEP-REQ-150).
+  - `conformance-invalid-session-identity-not-applicable.json` is an
+    `EvaluationSession` document (validate it against
+    `evaluation-session.schema.json` with `test-identity.schema.json` as a
+    reference) whose bound identity, `eval.pm-standard`, is not applicable to the
+    session's agent `example.release-notes` per the identity fixtures here.
+    Applicability is a cross-document check at bind time (AEP-REQ-148 c).
 
 Validate with any Draft 2020-12 validator, e.g.:
 
@@ -34,4 +40,8 @@ Validate with any Draft 2020-12 validator, e.g.:
 npx ajv validate --spec=draft2020 --validate-formats=false \
   -s schemas/test-identity.schema.json \
   -d "schemas/tests/test-identity/valid-*.json"
+
+npx ajv validate --spec=draft2020 --validate-formats=false \
+  -s schemas/evaluation-session.schema.json -r schemas/test-identity.schema.json \
+  -d schemas/tests/test-identity/conformance-invalid-session-identity-not-applicable.json
 ```

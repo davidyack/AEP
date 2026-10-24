@@ -1,0 +1,22 @@
+{
+  "identityId": "eval.ci-runner",
+  "kind": "service",
+  "displayName": "CI integration principal",
+  "applicability": [
+    {
+      "agentId": "example.inquiry-assistant",
+      "authorizedModes": [
+        "blackbox",
+        "graybox"
+      ]
+    },
+    {
+      "agentId": "example.release-notes",
+      "authorizedModes": [
+        "blackbox"
+      ]
+    }
+  ],
+  "status": "available",
+  "lastUpdatedAt": "2026-04-15T00:00:00Z"
+}

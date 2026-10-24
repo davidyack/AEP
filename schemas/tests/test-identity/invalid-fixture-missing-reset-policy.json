@@ -2,9 +2,20 @@
   "identityId": "eval.pm-standard",
   "kind": "user",
   "displayName": "Standard product manager",
-  "agentIds": ["example.inquiry-assistant"],
-  "authorizedModes": ["blackbox"],
-  "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3" },
+  "applicability": [
+    {
+      "agentId": "example.inquiry-assistant",
+      "authorizedModes": [
+        "blackbox",
+        "graybox",
+        "policybox"
+      ]
+    }
+  ],
   "status": "available",
-  "lastUpdatedAt": "2026-04-15T00:00:00Z"
+  "lastUpdatedAt": "2026-04-15T00:00:00Z",
+  "fixture": {
+    "fixtureId": "pm-standard-ws",
+    "version": "2026.04.3"
+  }
 }

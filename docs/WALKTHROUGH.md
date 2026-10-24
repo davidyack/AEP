@@ -125,9 +125,10 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
       "description": "Member of one workspace with 40 seeded items and two prior inquiry threads; no admin rights.",
       "tenancy": { "tenantId": "eval-tenant-01" },
       "roles": ["workspace-member"],
-      "agentIds": ["example.inquiry-assistant"],
-      "authorizedModes": ["blackbox", "graybox", "policybox", "toolbox"],
-      "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3", "digest": "sha256:9f2c…", "resetPolicy": "per-session" },
+      "applicability": [
+        { "agentId": "example.inquiry-assistant", "authorizedModes": ["blackbox", "graybox", "policybox"] }
+      ],
+      "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3", "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b", "resetPolicy": "per-session" },
       "maxConcurrentSessions": 1,
       "status": "available",
       "lastUpdatedAt": "2026-04-15T00:00:00Z"
@@ -138,7 +139,7 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
 }
 ```
 
-Two things to notice. The response contains no token, password, or cookie: you will *name* this identity at session start and the server will act as it — you never hold its credentials (AEP-REQ-145). And the identity is scoped *to you*: `agentIds` and `authorizedModes` are the intersection of what the target configured for the identity and what your credential may do, so another evaluator may see a different list for the same identity. This one may be bound to this agent only, in four live modes, one session at a time, with the seeded workspace restored before each session (`resetPolicy: per-session`). `replay` is never listed — replaying a Trace that recorded this identity is governed by the Trace, not by this list.
+Two things to notice. The response contains no token, password, or cookie: you will *name* this identity at session start and the server will act as it — you never hold its credentials (AEP-REQ-145). And `applicability` is computed *for you*: each entry is an agent you may bind this identity to, with the modes in which you may do so — the intersection of what the target configured for the identity, what the agent supports, and what your credential may do. That is why the entry lists the same three modes your Step 1 summary showed as `authorizedModes`; another evaluator with `toolbox` rights would see four. This identity holds one session at a time, with the seeded workspace restored before each session (`resetPolicy: per-session`), and the slot is released the moment the session leaves `active`, expiry included. `replay` is never listed — replaying a Trace that recorded this identity is governed by the Trace, not by this list.
 
 Only identities you are authorized to bind are listed. A server whose agents never act as a principal returns an empty list here, and its agents carry `identityBinding: "none"`.
 
@@ -250,8 +251,8 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
     "kind": "user",
     "tenancy": { "tenantId": "eval-tenant-01" },
     "roles": ["workspace-member"],
-    "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3", "digest": "sha256:9f2c…" },
-    "authorizationRef": "YXV0aHpfYTFiMmMzZDRlNWY2Nzg5MA",
+    "fixture": { "fixtureId": "pm-standard-ws", "version": "2026.04.3", "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b" },
+    "authorizationRef": "Q3m9VZ2rXkT1pLwa8NfYhBsc",
     "boundAt": "2026-04-17T12:00:00Z"
   },
   "state": "active",
@@ -262,7 +263,7 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
 
 The session is now `active`. Internally, the server validated the identity binding (right agent, right mode, available), restored the `pm-standard-ws` fixture to version `2026.04.3`, established the acting principal, created the session record, recorded the initial `created` state, and completed the `created -> active` transition before returning success. The `identity` snapshot is fixed for the session and will appear on the Trace — it is how the principal, which influences every turn, stays visible to replay (AEP-REQ-149). Its `authorizationRef` points at the server's audit record of the decision that let *your* credential bind *this* identity; the Trace carries the pointer, never your token or scope. You can now run turns or scenarios.
 
-Had you omitted `identityId`, the server would have answered `-32071 identity_binding_invalid`; had you named an identity scoped to another agent, or a `service` identity where the contract's `kinds` lists only `user`, the same; had `eval.pm-standard` been mid-reset or already held by another session, `-32072 identity_unavailable` with a `retryAfterMs`.
+Had you omitted `identityId`, the server would have answered `-32071 identity_binding_invalid`; had you named an identity scoped to another agent, or a `service` identity where the contract's `kinds` lists only `user`, the same; had `eval.pm-standard` been mid-reset or already held by another session, `-32072 identity_unavailable` with a `retryAfterMs`; had it been retired, `-32071` again, because that never clears. The checks run in a fixed order — agent, then identity existence, then binding shape, then availability — so the error you get never tells you whether something you were not allowed to see exists.
 
 ---
 

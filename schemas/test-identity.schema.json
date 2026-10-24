@@ -2,60 +2,62 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aep.dev/schemas/test-identity.schema.json",
   "title": "TestIdentity",
-  "description": "A synthetic principal the target establishes in its evaluation environment so an agent can act as a known user or service during evaluation (spec §8.2). Returned by GET /aep/identities and GET /aep/identities/{identityId}. Evaluators discover identities and bind one at session start by identityId; they never create them and never receive the identity's credentials (AEP-REQ-145). The document is descriptive: additionalProperties is false so no credential-shaped field can be added, and 'attributes' MUST NOT carry secrets or real PII (AEP-REQ-144).",
+  "description": "A synthetic principal the target establishes in its evaluation environment so an agent can act as a known user or service during evaluation (spec §8.2). Returned by GET /aep/identities and GET /aep/identities/{identityId}, with applicability computed for the calling identity (AEP-REQ-141). Evaluators discover identities and bind one at session start by identityId; they never create them and never receive the identity's credentials (AEP-REQ-145). The document is descriptive: additionalProperties is false so no credential-shaped field can be added, 'attributes' rejects credential-like property names, and its values MUST NOT carry secrets or real PII (AEP-REQ-144).",
   "type": "object",
-  "required": ["identityId", "kind", "displayName", "agentIds", "authorizedModes", "status", "lastUpdatedAt"],
+  "required": [
+    "identityId",
+    "kind",
+    "displayName",
+    "applicability",
+    "status",
+    "lastUpdatedAt"
+  ],
   "properties": {
     "identityId": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "description": "Stable handle the evaluator passes as identityId at session start. Possession confers nothing: binding is authorized against the caller's own credential (AEP-REQ-145), so this need not be high-entropy and MAY be human-readable."
+      "description": "Stable handle the evaluator passes as identityId at session start. Possession confers nothing: binding is authorized against the caller's own credential (AEP-REQ-145), so this need not be high-entropy and MAY be human-readable. Retired identities keep their id so Trace snapshots resolve (AEP-REQ-141)."
     },
     "kind": {
-      "oneOf": [
-        {"enum": ["user", "service"]},
-        {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
-      ],
-      "description": "'user' — a synthetic end-user principal. 'service' — a non-human principal (integration, automation, agent-to-agent caller). Custom kinds use reverse-DNS prefixes."
+      "$ref": "#/$defs/IdentityKind"
     },
-    "displayName": {"type": "string", "minLength": 1},
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
     "description": {
       "type": "string",
       "description": "What this identity is for: its role, what seeded data it can see, what it cannot do. Evaluators choose identities from this text."
     },
     "tenancy": {
-      "type": "object",
-      "required": ["tenantId"],
-      "properties": {
-        "tenantId": {"type": "string", "minLength": 1, "description": "Evaluation tenant / workspace / organization the identity belongs to. MUST be an evaluation tenant, never a production tenant (AEP-REQ-086, AEP-REQ-130)."},
-        "displayName": {"type": "string"}
-      },
-      "additionalProperties": false
+      "$ref": "#/$defs/Tenancy"
     },
     "roles": {
       "type": "array",
-      "items": {"type": "string", "minLength": 1},
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "description": "Product-defined role labels the identity holds (e.g. 'workspace-admin', 'viewer'). Descriptive; the product's authorization layer remains authoritative."
     },
     "attributes": {
       "type": "object",
-      "description": "Descriptive, non-secret attributes evaluators may filter or reason on (locale, seniority, plan tier, feature flags). MUST NOT contain credentials, tokens, or real personally identifiable information (AEP-REQ-144, AEP-REQ-145).",
+      "description": "Descriptive, non-secret attributes evaluators may filter or reason on (locale, seniority, plan tier, feature flags). Property names that look like credentials (token, secret, passw*, credential, cookie, api key, private key, bearer, session id) fail the schema; values MUST NOT contain credentials or real personally identifiable information either, which only contract validation can check (AEP-REQ-144, AEP-REQ-145).",
+      "propertyNames": {
+        "not": {
+          "pattern": "[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Pp][Aa][Ss][Ss][Ww]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Bb][Ee][Aa][Rr][Ee][Rr]|[Ss][Ee][Ss][Ss][Ii][Oo][Nn][_-]?[Ii][Dd]"
+        }
+      },
       "additionalProperties": true
     },
-    "agentIds": {
+    "applicability": {
       "type": "array",
-      "items": {"type": "string", "minLength": 1},
       "minItems": 1,
-      "uniqueItems": true,
-      "description": "Agents the CALLING IDENTITY may bind this identity to: the intersection of the identity's declared applicability and the caller's agent authorization (AEP-REQ-141). Computed per caller so the list never names an agent the caller cannot see. The literal '*' means every agent the caller is authorized to evaluate. Covering an agent is half of applicability; the other half is that the agent's contract accepts this identity's kind (contextModel.identity.kinds, spec §8.2). Servers reject a binding that fails either with -32071 (AEP-REQ-148)."
-    },
-    "authorizedModes": {
-      "type": "array",
-      "items": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live"]},
-      "minItems": 1,
-      "uniqueItems": true,
-      "description": "Live evaluation modes in which the CALLING IDENTITY may bind this identity for a fresh session: the intersection of the identity's declared applicability and the caller's mode authorization, as authorizedModes on AgentSummary (AEP-REQ-026, AEP-REQ-141). 'replay' is deliberately not listable: replaying a Trace that recorded this identity is governed by the Trace's mode and AEP-REQ-046, not by this list (AEP-REQ-148, AEP-REQ-151). An identity whose fixture must never be mutated omits 'sandboxed-live'."
+      "items": {
+        "$ref": "#/$defs/ApplicabilityEntry"
+      },
+      "description": "Per-caller projection of where this identity may be bound (AEP-REQ-141): one entry per agent the CALLING IDENTITY may bind it to, with the live modes in which it may do so. Computed as the intersection of the target's declared applicability, the agent's evaluationModes, and the caller's per-agent per-mode authorization, so an entry never names an agent the caller cannot see and never lists a mode the agent lacks. Entries MUST have distinct agentIds. The target's declaration itself (wildcards and all) is not on the wire. An identity with no entries for a caller is omitted from that caller's list."
     },
     "fixture": {
       "$ref": "#/$defs/FixtureReference",
@@ -65,45 +67,145 @@
       "type": "integer",
       "minimum": 1,
       "default": 1,
-      "description": "How many sessions may hold this identity at once. Identities with a per-session fixture reset are typically 1."
+      "description": "How many sessions may hold this identity at once; a slot is held from created→active until the session leaves active and is enforced per fixtureId across identities that share one (AEP-REQ-150). Identities with a per-session fixture reset are typically 1."
     },
     "status": {
-      "enum": ["available", "unavailable", "retired"],
-      "description": "'available' — may be bound now. 'unavailable' — exists and is applicable but cannot be bound now (reset in progress, at concurrency limit, maintenance); binding returns -32072. 'retired' — kept for Trace continuity; new bindings return -32072."
+      "enum": [
+        "available",
+        "unavailable",
+        "retired"
+      ],
+      "description": "'available' — may be bound now. 'unavailable' — exists and is applicable but cannot be bound now (reset in progress, at concurrency limit, maintenance); binding returns -32072 with retryAfterMs. 'retired' — permanent; kept for Trace continuity and omitted from default listings (AEP-REQ-141); new bindings return -32071, which is not retryable (AEP-REQ-148 c)."
     },
-    "statusReason": {"type": "string"},
+    "statusReason": {
+      "type": "string"
+    },
     "availableAt": {
       "type": "string",
       "format": "date-time",
-      "description": "When an 'unavailable' identity is expected to become available, if known."
+      "description": "When an 'unavailable' identity is expected to become available, if known. Only permitted when status is 'unavailable'."
     },
     "lastUpdatedAt": {
       "type": "string",
       "format": "date-time",
-      "description": "When the identity document last changed. Drives the updatedSince filter."
+      "description": "When the identity document last changed, including the transition to 'retired'. Drives the updatedSince filter (AEP-REQ-142)."
+    }
+  },
+  "if": {
+    "properties": {
+      "status": {
+        "const": "unavailable"
+      }
+    },
+    "required": [
+      "status"
+    ]
+  },
+  "else": {
+    "not": {
+      "required": [
+        "availableAt"
+      ]
     }
   },
   "$defs": {
+    "IdentityKind": {
+      "description": "'user' — a synthetic end-user principal. 'service' — a non-human principal (integration, automation, agent-to-agent caller). Custom kinds use reverse-DNS prefixes. Shared by TestIdentity.kind, IdentityBinding.kind and AgentContract.contextModel.identity.kinds.",
+      "oneOf": [
+        {
+          "enum": [
+            "user",
+            "service"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+        }
+      ]
+    },
+    "Tenancy": {
+      "type": "object",
+      "required": [
+        "tenantId"
+      ],
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Evaluation tenant / workspace / organization the identity belongs to. MUST be an evaluation tenant, never a production tenant (AEP-REQ-086, AEP-REQ-130). Tenancy is not the isolation boundary between identities; the fixture is (AEP-REQ-150)."
+        },
+        "displayName": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ApplicabilityEntry": {
+      "type": "object",
+      "required": [
+        "agentId",
+        "authorizedModes"
+      ],
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "An agent the caller may bind this identity to. Its contract accepts this identity's kind (spec §8.2)."
+        },
+        "authorizedModes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "blackbox",
+              "graybox",
+              "policybox",
+              "toolbox",
+              "sandboxed-live"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Live modes in which the CALLING IDENTITY may bind this identity to this agent for a fresh session. 'replay' is deliberately not listable: replaying a Trace that recorded this identity is governed by the Trace's mode and AEP-REQ-046, not by this list (AEP-REQ-148 c, AEP-REQ-151). An identity whose fixture never resets never lists 'sandboxed-live' (AEP-REQ-150)."
+        }
+      },
+      "additionalProperties": false
+    },
     "FixtureReference": {
       "type": "object",
-      "required": ["fixtureId", "version", "resetPolicy"],
+      "required": [
+        "fixtureId",
+        "version",
+        "resetPolicy"
+      ],
       "properties": {
-        "fixtureId": {"type": "string", "minLength": 1},
+        "fixtureId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifies the seeded state. Identities that share state share a fixtureId; the concurrency limit is enforced per fixtureId (AEP-REQ-150)."
+        },
         "version": {
           "type": "string",
           "minLength": 1,
-          "description": "Monotonic version string for the seeded state. Changes whenever the fixture content changes."
+          "description": "Opaque identifier for the seeded state's content, compared for equality only — no ordering is defined. The target changes it whenever the fixture content changes (AEP-REQ-150)."
         },
         "digest": {
           "type": "string",
           "pattern": "^(sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128})$",
-          "description": "Digest over a target-defined canonical serialization of the fixture state (AEP-REQ-150). Two bindings with equal digests saw equal state."
+          "description": "Digest over a target-defined canonical serialization of the fixture at its declared version, as last reset or verified (AEP-REQ-150). Two equal digests describe equal state."
         },
         "resetPolicy": {
-          "enum": ["none", "per-session", "scheduled", "on-demand"],
-          "description": "'none' — fixture is never reset (read-only identities). 'per-session' — restored to 'version' before every binding. 'scheduled' — restored on a target-defined schedule. 'on-demand' — restored when the target chooses; the Trace snapshot records what was seen."
+          "enum": [
+            "none",
+            "per-session",
+            "scheduled",
+            "on-demand"
+          ],
+          "description": "'none' — fixture is never reset; such an identity is never applicable in sandboxed-live (AEP-REQ-150). 'per-session' — restored to 'version' before every binding. 'scheduled' — restored on a target-defined schedule. 'on-demand' — restored when the target chooses; the Trace snapshot records what was seen."
         },
-        "description": {"type": "string"}
+        "description": {
+          "type": "string"
+        }
       },
       "additionalProperties": false
     },
@@ -111,45 +213,63 @@
       "title": "IdentityBinding",
       "description": "Snapshot of a test identity as resolved when a session bound it (AEP-REQ-149). Recorded on EvaluationSession.identity and Trace.identity, and carried whole on the session.started stream event so Trace reconstruction from the stream stays lossless (AEP-REQ-114). tenancy, roles and fixture are present whenever the bound identity carries them. Carries no credentials (AEP-REQ-145).",
       "type": "object",
-      "required": ["identityId", "kind", "authorizationRef", "boundAt"],
+      "required": [
+        "identityId",
+        "kind",
+        "authorizationRef",
+        "boundAt"
+      ],
       "properties": {
-        "identityId": {"type": "string", "minLength": 1},
+        "identityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "$ref": "#/$defs/IdentityKind"
+        },
         "authorizationRef": {
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{22,128}$",
-          "description": "Opaque, high-entropy reference (AEP-REQ-126) to the audit record of the authorization decision that permitted this binding — which evaluator credential, under which scope, at what time (AEP-REQ-090, AEP-REQ-153). Joins the snapshot to the server's audit log without putting the evaluator's credential or scope on the Trace."
-        },
-        "kind": {
-          "oneOf": [
-            {"enum": ["user", "service"]},
-            {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
-          ]
+          "description": "Opaque, high-entropy reference (AEP-REQ-126) to the audit record of the authorization decision that permitted this binding — which evaluator credential, under which scope, at what time (AEP-REQ-090, AEP-REQ-153). Joins the snapshot to the server's audit log without putting the evaluator's credential or scope on the Trace. A re-execution replay gets a fresh one (AEP-REQ-149)."
         },
         "tenancy": {
-          "type": "object",
-          "required": ["tenantId"],
-          "properties": {
-            "tenantId": {"type": "string", "minLength": 1},
-            "displayName": {"type": "string"}
-          },
-          "additionalProperties": false
+          "$ref": "#/$defs/Tenancy"
         },
-        "roles": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "fixture": {
           "type": "object",
-          "required": ["fixtureId", "version"],
+          "required": [
+            "fixtureId",
+            "version"
+          ],
           "properties": {
-            "fixtureId": {"type": "string", "minLength": 1},
-            "version": {"type": "string", "minLength": 1},
+            "fixtureId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
             "digest": {
               "type": "string",
-              "pattern": "^(sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128})$"
+              "pattern": "^(sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128})$",
+              "description": "Computed at bind time, after any per-session reset: the state the session actually started against (AEP-REQ-150)."
             }
           },
           "additionalProperties": false,
-          "description": "Fixture version and digest as observed at bind time; replay compares against these (AEP-REQ-151)."
+          "description": "Fixture version and digest as observed at bind time; re-execution replay compares against these (AEP-REQ-151)."
         },
-        "boundAt": {"type": "string", "format": "date-time"}
+        "boundAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
       "additionalProperties": false
     }

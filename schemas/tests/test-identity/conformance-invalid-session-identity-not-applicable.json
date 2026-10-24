@@ -1,0 +1,38 @@
+{
+  "sessionId": "c2Vzc19hMWIyYzNkNGU1ZjY3ODkw",
+  "aepVersion": "0.1",
+  "agentId": "example.release-notes",
+  "agentVersion": "3.0.0",
+  "testMode": "graybox",
+  "evaluator": {
+    "id": "ci-bot",
+    "type": "automated"
+  },
+  "identity": {
+    "identityId": "eval.pm-standard",
+    "kind": "user",
+    "authorizationRef": "Q3m9VZ2rXkT1pLwa8NfYhBsc",
+    "tenancy": {
+      "tenantId": "eval-tenant-01"
+    },
+    "fixture": {
+      "fixtureId": "pm-standard-ws",
+      "version": "2026.04.3",
+      "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b"
+    },
+    "boundAt": "2026-04-17T12:00:00Z"
+  },
+  "state": "active",
+  "createdAt": "2026-04-17T12:00:00Z",
+  "expiresAt": "2026-04-17T12:15:00Z",
+  "injectedContext": {},
+  "lifecycle": {
+    "transitions": [
+      {
+        "from": "created",
+        "to": "active",
+        "at": "2026-04-17T12:00:00Z"
+      }
+    ]
+  }
+}

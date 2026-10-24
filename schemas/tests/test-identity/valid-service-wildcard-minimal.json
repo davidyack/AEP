@@ -1,9 +1,0 @@
-{
-  "identityId": "eval.ci-runner",
-  "kind": "service",
-  "displayName": "CI integration principal",
-  "agentIds": ["*"],
-  "authorizedModes": ["blackbox", "graybox"],
-  "status": "available",
-  "lastUpdatedAt": "2026-04-15T00:00:00Z"
-}

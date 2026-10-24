@@ -3,11 +3,25 @@
   "kind": "com.example.external-reviewer",
   "displayName": "External reviewer (guest)",
   "description": "Guest principal with read-only access to one shared canvas.",
-  "tenancy": { "tenantId": "eval-tenant-01" },
-  "roles": ["guest"],
-  "agentIds": ["example.inquiry-assistant"],
-  "authorizedModes": ["blackbox"],
-  "fixture": { "fixtureId": "guest-shared-canvas", "version": "3", "resetPolicy": "scheduled" },
+  "tenancy": {
+    "tenantId": "eval-tenant-01"
+  },
+  "roles": [
+    "guest"
+  ],
+  "applicability": [
+    {
+      "agentId": "example.inquiry-assistant",
+      "authorizedModes": [
+        "blackbox"
+      ]
+    }
+  ],
+  "fixture": {
+    "fixtureId": "guest-shared-canvas",
+    "version": "3",
+    "resetPolicy": "scheduled"
+  },
   "status": "unavailable",
   "statusReason": "Fixture reset in progress",
   "availableAt": "2026-04-15T00:05:00Z",

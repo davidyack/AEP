@@ -1,0 +1,21 @@
+{
+  "identityId": "eval.pm-standard",
+  "kind": "user",
+  "displayName": "Standard product manager",
+  "applicability": [
+    {
+      "agentId": "example.inquiry-assistant",
+      "authorizedModes": [
+        "blackbox",
+        "sandboxed-live"
+      ]
+    }
+  ],
+  "status": "available",
+  "lastUpdatedAt": "2026-04-15T00:00:00Z",
+  "fixture": {
+    "fixtureId": "guest-shared-canvas",
+    "version": "3",
+    "resetPolicy": "none"
+  }
+}

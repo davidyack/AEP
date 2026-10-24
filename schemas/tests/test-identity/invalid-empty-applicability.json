@@ -2,8 +2,7 @@
   "identityId": "eval.pm-standard",
   "kind": "user",
   "displayName": "Standard product manager",
-  "agentIds": [],
-  "authorizedModes": ["blackbox"],
+  "applicability": [],
   "status": "available",
   "lastUpdatedAt": "2026-04-15T00:00:00Z"
 }

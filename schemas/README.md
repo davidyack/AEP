@@ -11,7 +11,7 @@ Canonical JSON Schema (Draft 2020-12) definitions for AEP data models. These are
 | [`agent-descriptor.schema.json`](./agent-descriptor.schema.json) | Identity, risk tier, lifecycle, ownership. A subcomponent of the Agent Contract. |
 | [`capabilities-registry.schema.json`](./capabilities-registry.schema.json) | Declared domains, actions, modalities, quality claims, out-of-scope statements. |
 | [`context-bundle.schema.json`](./context-bundle.schema.json) | Evaluator-oriented curation: purpose, example tasks, boundaries, policy summary, tool descriptors. |
-| [`test-identity.schema.json`](./test-identity.schema.json) | **Required.** A synthetic principal the target established for evaluation, returned by `GET /aep/identities` (§7.1, §8.2). Kind, tenancy, roles, per-caller applicable agents and authorized modes, versioned fixture, availability. Carries no credentials by construction. Also defines `IdentityBinding`, the snapshot recorded on sessions and traces. |
+| [`test-identity.schema.json`](./test-identity.schema.json) | **Required.** A synthetic principal the target established for evaluation, returned by `GET /aep/identities` (§7.1, §8.2). Kind, tenancy, roles, per-caller `applicability` (agent + authorized live modes), versioned fixture, availability. Carries no credentials by construction. Also defines `IdentityBinding`, the snapshot recorded on sessions and traces. |
 
 ## Tools and policy (optional extensions)
 
