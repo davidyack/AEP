@@ -64,7 +64,7 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
       "supportedModes": ["blackbox", "graybox", "policybox", "toolbox", "replay"],
       "authorizedModes": ["blackbox", "graybox", "policybox"],
       "supportedExtensions": ["policy-profile", "deterministic-replay"],
-      "identityBinding": "required",
+      "identityBinding": { "binding": "required", "kinds": ["user", "com.example.external-reviewer"] },
       "lastUpdatedAt": "2026-04-15T00:00:00Z"
     }
   ],
@@ -97,7 +97,7 @@ Pagination is cursor-based: use `nextCursor` from one response as `?cursor=` on 
 
 ## Step 1b — Discover the test identities you may act as
 
-The summary above carries `"identityBinding": "required"`: the Inquiry Assistant reads the acting user's workspace, so every session must act as a principal the product knows. Before starting a session you need to know which synthetic principals the target has established for it (spec §8.2):
+The summary above carries `"identityBinding": { "binding": "required" }` with no per-mode overrides: the Inquiry Assistant reads the acting user's workspace in every mode, so every session must act as a principal the product knows. Before starting a session you need to know which synthetic principals the target has established for it (spec §8.2):
 
 **REST**
 
@@ -141,7 +141,51 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
 
 Two things to notice. The response contains no token, password, or cookie: you will *name* this identity at session start and the server will act as it — you never hold its credentials (AEP-REQ-145). And `applicability` is computed *for you*: each entry is an agent you may bind this identity to, with the modes in which you may do so — the intersection of what the target configured for the identity, what the agent supports, and what your credential may do. That is why the entry lists the same three modes your Step 1 summary showed as `authorizedModes`; another evaluator with `toolbox` rights would see four. This identity holds one session at a time, with the seeded workspace restored before each session (`resetPolicy: per-session`), and the slot is released the moment the session leaves `active`, expiry included. `replay` is never listed — replaying a Trace that recorded this identity is governed by the Trace, not by this list.
 
-Only identities you are authorized to bind are listed. A server whose agents never act as a principal returns an empty list here, and its agents carry `identityBinding: "none"`.
+Only identities you are authorized to bind are listed. A server whose agents never act as a principal returns an empty list here, and its agents carry `identityBinding: { "binding": "none" }`.
+
+### Sidebar — agents with a per-mode split
+
+Many product-embedded agents are not like the Inquiry Assistant. Their lower-mode adapter runs synthetically against the injected context and reads no live state at all; only `sandboxed-live` calls the real agent against a live sandbox workspace. For those, a principal matters in one mode and is meaningless in the rest, and the contract says so with a per-mode override (spec §8.2, AEP-REQ-146; the fragment is the fixture [`valid-identity-model-permode-split.json`](../schemas/tests/test-identity/valid-identity-model-permode-split.json)):
+
+```json
+"identity": {
+  "binding": "none",
+  "perMode": { "sandboxed-live": "required" },
+  "kinds": ["user"]
+}
+```
+
+A graybox session against such an agent binds nothing — supplying an `identityId` here is `-32071`, because the effective binding for `graybox` is `none`:
+
+```json
+{ "jsonrpc": "2.0", "id": 3, "method": "aep.session.start",
+  "params": { "agentId": "example.permode-split", "testMode": "graybox",
+              "injectedContext": { "user": { "role": "product-manager" } }, "ttlSeconds": 900 } }
+```
+
+```json
+{ "sessionId": "sess_q7r8s9", "agentId": "example.permode-split", "agentVersion": "2.0.0",
+  "testMode": "graybox", "state": "active", "createdAt": "2026-04-17T12:00:00Z", "expiresAt": "2026-04-17T12:15:00Z" }
+```
+
+A `sandboxed-live` session against the same agent must bind one — omitting `identityId` is `-32071` — so Step 1b comes first, filtered to the mode that needs it (`GET /aep/identities?agent=example.permode-split&mode=sandboxed-live`), and the start names what it returned:
+
+```json
+{ "jsonrpc": "2.0", "id": 4, "method": "aep.session.start",
+  "params": { "agentId": "example.permode-split", "testMode": "sandboxed-live", "identityId": "eval.pm-admin-empty",
+              "injectedContext": { "user": { "role": "product-manager" } }, "ttlSeconds": 900 } }
+```
+
+```json
+{ "sessionId": "sess_t1u2v3", "agentId": "example.permode-split", "agentVersion": "2.0.0",
+  "testMode": "sandboxed-live",
+  "identity": { "identityId": "eval.pm-admin-empty", "kind": "user", "tenancy": { "tenantId": "eval-tenant-01" },
+                "roles": ["workspace-admin"], "fixture": { "fixtureId": "pm-admin-empty-ws", "version": "1" },
+                "authorizationRef": "mXk2Ltq9ZvR4bN7wPc1sYdHe", "boundAt": "2026-04-17T12:01:00Z" },
+  "state": "active", "createdAt": "2026-04-17T12:01:00Z", "expiresAt": "2026-04-17T12:16:00Z" }
+```
+
+Synthetic first, live second, and the contract — not the runtime — decides which sessions carry a principal. A `perMode` key for a mode the agent does not list in `evaluationModes` is a contract error the server refuses at startup, so a typo cannot leave a live mode unprotected. Replay is never a key: a replayed Trace carries its own answer.
 
 ---
 
@@ -203,7 +247,7 @@ You'll validate your inputs against `inputSchema` client-side before submission 
 
 ## Step 3 — Start a session
 
-Sessions bind a specific agent version, the test identity the agent acts as, and the injected context. You pick the evaluation mode based on what you need to observe — here we use `graybox`, which gives access to the Context Bundle but not tool calls or policy events. Because the contract declares `contextModel.identity.binding: "required"`, the request names one of the identities from Step 1b; the `user` injection point still carries the *profile content* the agent should see, which is a different thing from the principal it acts as.
+Sessions bind a specific agent version, the test identity the agent acts as, and the injected context. You pick the evaluation mode based on what you need to observe — here we use `graybox`, which gives access to the Context Bundle but not tool calls or policy events. Because the contract declares `contextModel.identity.binding: "required"` with no per-mode override, the effective binding for `graybox` is `required` and the request names one of the identities from Step 1b; the `user` injection point still carries the *profile content* the agent should see, which is a different thing from the principal it acts as.
 
 **REST**
 

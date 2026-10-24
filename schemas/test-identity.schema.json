@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aep.dev/schemas/test-identity.schema.json",
   "title": "TestIdentity",
-  "description": "A synthetic principal the target establishes in its evaluation environment so an agent can act as a known user or service during evaluation (spec §8.2). Returned by GET /aep/identities and GET /aep/identities/{identityId}, with applicability computed for the calling identity (AEP-REQ-141). Evaluators discover identities and bind one at session start by identityId; they never create them and never receive the identity's credentials (AEP-REQ-145). The document is descriptive: additionalProperties is false so no credential-shaped field can be added, 'attributes' rejects credential-like property names, and its values MUST NOT carry secrets or real PII (AEP-REQ-144).",
+  "description": "A synthetic principal the target establishes in its evaluation environment so an agent can act as a known user or service during evaluation (spec §8.2). Returned by GET /aep/identities and GET /aep/identities/{identityId}, with applicability computed for the calling identity (AEP-REQ-141). Evaluators discover identities and bind one at session start by identityId; they never create them and never receive the identity's credentials (AEP-REQ-145). The document is descriptive: additionalProperties is false so no credential-shaped field can be added, 'attributes' rejects credential-like property names, and its values MUST NOT carry secrets or real PII (AEP-REQ-144). This file also hosts the agent-side declaration, $defs/IdentityModel, referenced by AgentContract.contextModel.identity and AgentSummary.identityBinding so the two cannot drift.",
   "type": "object",
   "required": [
     "identityId",
@@ -269,6 +269,81 @@
         "boundAt": {
           "type": "string",
           "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "IdentityModel": {
+      "title": "IdentityModel",
+      "description": "An agent's declaration of whether it acts as a test identity (spec §8.2, AEP-REQ-146). 'binding' is the agent-wide default; 'perMode' overrides it for individual live modes, and a mode not listed inherits 'binding'. The effective binding for a session is the value for its testMode. 'replay' is never a key: a replay follows the Trace (AEP-REQ-148 a, AEP-REQ-151). A perMode key naming a mode outside the agent's evaluationModes is a contract-validation error, not ignored (AEP-REQ-146). Mirrored unchanged on AgentSummary.identityBinding.",
+      "type": "object",
+      "required": [
+        "binding"
+      ],
+      "properties": {
+        "binding": {
+          "enum": [
+            "none",
+            "optional",
+            "required"
+          ],
+          "description": "Agent-wide default. 'none' — in that mode the agent's behavior is fully determined by input and injected context; identityId MUST NOT be supplied. 'optional' — the agent runs with or without a bound principal; unbound means no principal, never an ambient one. 'required' — every session in that mode MUST bind a test identity; the target MUST have declared at least one applicable identity for it (AEP-REQ-147)."
+        },
+        "perMode": {
+          "type": "object",
+          "description": "Per-mode overrides of 'binding'. Keys are the five live modes only; values are the same three bindings. Lets an agent that runs synthetically from injected context in the lower modes declare 'none' there and 'required' in sandboxed-live, where it touches live state.",
+          "properties": {
+            "blackbox": {
+              "enum": [
+                "none",
+                "optional",
+                "required"
+              ]
+            },
+            "graybox": {
+              "enum": [
+                "none",
+                "optional",
+                "required"
+              ]
+            },
+            "policybox": {
+              "enum": [
+                "none",
+                "optional",
+                "required"
+              ]
+            },
+            "toolbox": {
+              "enum": [
+                "none",
+                "optional",
+                "required"
+              ]
+            },
+            "sandboxed-live": {
+              "enum": [
+                "none",
+                "optional",
+                "required"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/IdentityKind"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Identity kinds the agent can act as. Absent means any kind. Part of applicability (spec §8.2): the agent discovery filter omits identities of other kinds (AEP-REQ-142) and a bind with one is rejected with -32071 (AEP-REQ-148 c)."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the agent does with the principal: which authorization checks, which per-principal data, which attributed writes."
         }
       },
       "additionalProperties": false

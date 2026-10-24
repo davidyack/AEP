@@ -15,6 +15,12 @@ Naming convention (as for [`../capabilities-registry/`](../capabilities-registry
   `applicability`, a fixture without `resetPolicy`, an unknown or `replay`
   mode in `authorizedModes`, a non-reverse-DNS custom kind, `availableAt` on
   an `available` identity, and a truncated digest.
+- `*-identity-model-*.json` — fixtures for `$defs/IdentityModel`, the agent-side
+  declaration shared by `AgentContract.contextModel.identity` and
+  `AgentSummary.identityBinding`. `valid-identity-model-permode-split.json` is
+  the "synthetic below, live principal in sandboxed-live" agent the walkthrough's
+  sidebar describes. The invalid ones put `replay`, an unknown mode or an empty
+  object under `perMode`, or a value outside `none | optional | required`.
 - `conformance-invalid-*.json` — passes portable schema validation but violates a
   normative requirement that JSON Schema cannot express. A conformance suite, not
   the schema, rejects these:
@@ -27,6 +33,12 @@ Naming convention (as for [`../capabilities-registry/`](../capabilities-registry
   - `conformance-invalid-none-reset-in-sandboxed-live.json` lists
     `sandboxed-live` for an identity whose fixture has `resetPolicy: none`
     (AEP-REQ-150).
+  - `conformance-invalid-contract-permode-outside-evaluation-modes.json` is a
+    full `AgentContract` (validate it against `agent-contract.schema.json` with
+    `agent-descriptor`, `capabilities-registry` and `test-identity` as references)
+    whose `contextModel.identity.perMode` names `sandboxed-live` while
+    `evaluationModes` does not include it. AEP-REQ-146 makes that a startup
+    contract-validation error; the subset check is not portable schema.
   - `conformance-invalid-session-identity-not-applicable.json` is an
     `EvaluationSession` document (validate it against
     `evaluation-session.schema.json` with `test-identity.schema.json` as a

@@ -70,8 +70,8 @@
       "description": "Subset of supportedModes the CALLING IDENTITY is authorized to use. May be smaller than supportedModes based on caller's permissions."
     },
     "identityBinding": {
-      "enum": ["none", "optional", "required"],
-      "description": "Derived from the contract's contextModel.identity.binding (spec §8.2). Lets an evaluator know at browse time whether it must pick a test identity (GET /aep/identities?agent=...) before starting a session. Absent means 'none'."
+      "$ref": "./test-identity.schema.json#/$defs/IdentityModel",
+      "description": "The contract's contextModel.identity object, mirrored unchanged (spec §8.2) so summary and contract cannot drift. Lets an evaluator know at browse time in which modes it must pick a test identity (GET /aep/identities?agent=...&mode=...) before starting a session. Absent means binding 'none' in every mode."
     },
     "supportedExtensions": {
       "type": "array",
