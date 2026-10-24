@@ -1,0 +1,10 @@
+{
+  "binding": "none",
+  "perMode": {
+    "sandboxed-live": "required"
+  },
+  "kinds": [
+    "user"
+  ],
+  "description": "Runs synthetically from injected context in blackbox through toolbox; calls the real agent against live sandbox state in sandboxed-live, where it must act as a known user."
+}

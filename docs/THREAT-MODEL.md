@@ -124,6 +124,16 @@ This last point is often missed and is the source of several protocol-level thre
 
 **Residual risk.** Redaction is hard; secrets embedded in natural language are not always obvious. Err toward redaction when in doubt.
 
+### T9. Test identity becomes a credential
+
+**Scenario.** To let an agent act as a user, an implementation hands evaluators a real account, a product session token, or a "test user" that is actually a staff member's login. The token leaks through a CI log, a Trace, or a shared scenario, and now authorizes the product's own surface — or the "test user" is a real person whose data the evaluation reads.
+
+**Conditions.** Identity is modeled as something the evaluator *holds* rather than something the server *binds*; evaluation and production principals are not separated.
+
+**Mitigation.** Test identities (spec §8.2) are discovered by reference and bound server-side: the evaluator names an `identityId`, the server establishes the acting principal under the *evaluator's* authorization, and no credential for the identity appears in any AEP document, response, Trace, or event (AEP-REQ-145). Identities MUST be synthetic and live in an evaluation tenant (AEP-REQ-144, AEP-REQ-130). `additionalProperties: false` on `TestIdentity` closes every named slot a credential could occupy; the one free-form field, `attributes`, rejects credential-like property names at the schema level, and only a secret hidden behind an innocuous name is left to contract validation. Possession of an `identityId` confers nothing, so the handle may be human-readable and may appear in logs without consequence.
+
+**Residual risk.** The server still holds the mapping from identity to real principal in the evaluation environment, and a compromised server can misuse it. Fixture data seeded "realistically" can drift toward real data; AEP-REQ-144 forbids it but cannot detect it. A secret stored under an innocuous `attributes` name passes the schema and relies on conformance checks.
+
 ## Threat-to-mitigation summary
 
 | Threat | Primary mitigation | Pattern / schema element |
@@ -136,6 +146,7 @@ This last point is often missed and is the source of several protocol-level thre
 | T6 Evidence ref exfiltration | Pointer ≠ capability | Evidence Pointer pattern |
 | T7 Cost attack | Cost ceiling per scenario | (v0.2 work) |
 | T8 Sensitive scenario capture | Trace sensitivity inheritance | `promptDigest`, redaction |
+| T9 Test identity becomes a credential | Discover by reference, bind server-side, no credential on the wire | `TestIdentity`, `IdentityBinding`, AEP-REQ-145 |
 
 ## What's out of scope for the protocol
 

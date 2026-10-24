@@ -1,0 +1,6 @@
+{
+  "binding": "none",
+  "perMode": {
+    "sandboxed-live": "always"
+  }
+}

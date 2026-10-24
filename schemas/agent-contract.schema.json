@@ -135,6 +135,10 @@
           "type": "integer",
           "minimum": 0,
           "description": "Upper bound on history the agent will honor. Evaluators MUST NOT exceed this."
+        },
+        "identity": {
+          "$ref": "./test-identity.schema.json#/$defs/IdentityModel",
+          "description": "Whether the agent acts as a test identity (spec §8.2). Absent means binding 'none'. An agent whose behavior depends on an acting principal MUST declare 'optional' or 'required' (AEP-REQ-146)."
         }
       }
     },

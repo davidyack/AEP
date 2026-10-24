@@ -1,0 +1,6 @@
+{
+  "binding": "none",
+  "perMode": {
+    "production": "required"
+  }
+}

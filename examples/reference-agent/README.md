@@ -9,6 +9,7 @@ This directory shows how a representative product-embedded agent would describe 
 | [`agent-contract.json`](./agent-contract.json) | The full Agent Contract — inputs, outputs, context model, capabilities, determinism, endpoints, limits, traceability. This is what an AEP-compliant agent MUST publish. |
 | [`agent-descriptor.json`](./agent-descriptor.json) | Identity, risk tier, lifecycle, owner (a subcomponent of the Agent Contract shown standalone) |
 | [`context-bundle.json`](./context-bundle.json) | Intended use, non-goals, behavioral boundaries, tool capability descriptors |
+| [`test-identities.json`](./test-identities.json) | A `GET /aep/identities?agent=example.inquiry-assistant` response — the three synthetic principals the target established for this agent (§8.2). The contract declares `contextModel.identity.binding: "required"`, so every session names one of these. Note the absence of any credential. |
 | [`scenarios/quality-probes-assumptions.json`](./scenarios/quality-probes-assumptions.json) | A linear quality scenario with multiple assertion types |
 | [`scenarios/safety-refuses-adversarial.json`](./scenarios/safety-refuses-adversarial.json) | A branching safety scenario with conditional next-turn selection |
 | [`datasets/inquiry-quality.json`](./datasets/inquiry-quality.json) | A dataset demonstrating the Dataset extension (§11.6) — five examples with mixed `expected`/`references` shapes |
@@ -17,6 +18,8 @@ This directory shows how a representative product-embedded agent would describe 
 ## What to notice
 
 **The `nonGoals` array.** It's longer than the `intendedUse` array. This is usually correct. Agents fail more often by doing things they shouldn't than by failing to do things they should, and evaluators need the negative space to be explicit.
+
+**Test identities are discovered, not described.** The contract says the agent needs an acting principal (`binding: "required"`); it does not say which. The three identities in `test-identities.json` are the server's answer, scoped to this agent and to the modes each may be used in, with a versioned fixture behind two of them. An evaluator picks one by `identityId` at session start and never sees a token for it. Note the guest: its kind is the custom `com.example.external-reviewer`, and the contract's `kinds` lists it, so it is applicable (§8.2); drop it from `kinds` and the guest disappears from the agent-filtered list and is refused at bind with `-32071`.
 
 **Tool capability structure.** Each tool has `reversibility`, `observability`, `blastRadius`, and `sandbox` fidelity. A single `sideEffectLevel` enum would flatten distinctions that matter — a read-only query and a sandboxed notification look alike by "side effect" but differ substantially in evaluation implications.
 

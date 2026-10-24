@@ -80,6 +80,7 @@ An implementation satisfies the Core Profile when it provides:
 - **Discovery, session, turn, trace, result endpoints** (§7) on both REST and JSON-RPC surfaces
 - **Agent Contract** publication with the required fields (§5)
 - **Context injection** discipline (§8)
+- **Test identity discovery** (§7.1, §8.2) — the list MAY be empty on a server with no identity-bound agents
 - **`blackbox` and `graybox` evaluation modes** (§9); others are opt-in
 - **Registered error codes** (§12)
 - **Required security model**: authentication, authorization by mode, rate limits, isolation (§13)
@@ -300,6 +301,7 @@ Example list response:
       "supportedModes": ["blackbox", "graybox", "policybox", "toolbox", "replay"],
       "authorizedModes": ["blackbox", "graybox", "policybox"],
       "supportedExtensions": ["policy-profile", "deterministic-replay"],
+      "identityBinding": { "binding": "required", "kinds": ["user", "com.example.external-reviewer"] },
       "lastUpdatedAt": "2026-04-15T00:00:00Z"
     }
   ],
@@ -314,11 +316,66 @@ Example filtered call:
 GET /aep/agents?domain=customer-service&mode=policybox&extension=red-teaming&limit=25
 ```
 
+#### Test identity discovery
+
+Discovery answers three questions: which agents exist, which modes the caller may use against each, and — for agents that act on behalf of a principal — which **test identities** the caller may act as. Test identities are defined in §8.2; this section specifies their discovery surface.
+
+```
+GET  /aep/identities                  → { identities: TestIdentity[], nextCursor, total }
+GET  /aep/identities/{identityId}     → TestIdentity
+```
+
+**AEP-REQ-141**: Servers MUST implement `GET /aep/identities`, returning an array of `TestIdentity` objects (see [`../schemas/test-identity.schema.json`](../schemas/test-identity.schema.json)) and supporting `cursor` / `limit` pagination with the semantics of AEP-REQ-024. The response MUST contain only identities the *calling identity* is authorized to bind; unauthorized identities MUST be omitted, not surfaced with reduced fields. Each identity's `applicability` MUST be computed for the calling identity: one entry per agent the caller may bind this identity to, each carrying the `authorizedModes` in which the caller may do so — the intersection of the target's declared applicability for the identity, the agent's `evaluationModes`, and the caller's per-agent, per-mode authorization (AEP-REQ-088), exactly as `authorizedModes` on `AgentSummary` (AEP-REQ-026). An entry therefore never names an agent the caller cannot see and never lists a mode the agent does not support; an identity with no entries is omitted. The target's declared applicability (which may be expressed any way the target likes, wildcards included) is not on the wire; only the concrete per-caller projection is. Responses MUST be ordered by `identityId` ascending so pagination is stable across pages. Identities with `status: retired` MUST be omitted unless the `status` filter names `retired` or `updatedSince` is supplied; a retired identity keeps its `identityId`, remains retrievable by id while any retained Trace (AEP-REQ-047) records it, and is never hard-deleted in that window, so Trace snapshots always resolve. A server exposing no identity-bound agents returns an empty list — the endpoint itself is Core Profile.
+
+**AEP-REQ-142**: `GET /aep/identities` MUST support the following filter query parameters, combining as in AEP-REQ-025 (AND across parameters, OR within a comma-separated parameter). Unknown filter parameters MUST be rejected with `-32602`.
+
+| Parameter | Matches | Example |
+|-----------|---------|---------|
+| `agent` | identity has an `applicability` entry for this `agentId` (for this caller; §8.2) | `agent=example.inquiry-assistant` |
+| `mode` | some `applicability` entry — the `agent` entry when both are given — lists this live mode in `authorizedModes` (`replay` is governed by the Trace, not this list; §8.2) | `mode=toolbox` |
+| `kind` | identity kind | `kind=user` |
+| `tenant` | `tenancy.tenantId`; REQUIRED only on servers that populate `tenancy`, which others MAY reject as unknown | `tenant=eval-tenant-01` |
+| `status` | availability status; when absent, `available,unavailable` | `status=available` |
+| `q` | free-text search over displayName + description | `q=admin` |
+| `updatedSince` | `lastUpdatedAt` at or after the RFC 3339 timestamp. Retirement updates `lastUpdatedAt`, and retired identities are included in an `updatedSince` response regardless of the `status` filter, so a syncing client sees the tombstone | `updatedSince=2026-04-01T00:00:00Z` |
+
+The `agent` filter is the primary evaluator workflow: "which identities can I run *this* agent as?" Because `applicability` is computed per caller, the filtered list never discloses the existence of an agent the caller is not authorized for.
+
+**AEP-REQ-143**: `GET /aep/identities/{identityId}` returns the full `TestIdentity`. If the identity does not exist or the caller is not authorized to bind it, the server MUST return `-32070 identity_not_found` (not `-32010`), with the same existence-hiding rationale as AEP-REQ-028.
+
+Example list response, as seen by a caller authorized for `blackbox`, `graybox` and `policybox` on the agent:
+
+```json
+{
+  "identities": [
+    {
+      "identityId": "eval.member-standard",
+      "kind": "user",
+      "displayName": "Standard member",
+      "description": "Member of one shared space with 40 seeded items; no admin rights.",
+      "tenancy": { "tenantId": "eval-tenant-01", "displayName": "Evaluation tenant" },
+      "roles": ["member"],
+      "attributes": { "locale": "en-US", "seniority": "mid" },
+      "applicability": [
+        { "agentId": "example.inquiry-assistant", "authorizedModes": ["blackbox", "graybox", "policybox"] }
+      ],
+      "fixture": { "fixtureId": "member-standard", "version": "2026.04.3", "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b", "resetPolicy": "per-session" },
+      "maxConcurrentSessions": 1,
+      "status": "available",
+      "lastUpdatedAt": "2026-04-15T00:00:00Z"
+    }
+  ],
+  "nextCursor": null,
+  "total": 1
+}
+```
+
+Note what is absent: there is no token, password, cookie, or session secret for the identity anywhere in the document. The evaluator never holds the identity's product credentials; it names the identity at session start and the server does the rest (AEP-REQ-145). Note also that the identity supports `toolbox` for other callers — this caller's `authorizedModes` for the agent do not include it, so it is not shown.
 
 ### 7.2 Session (REST)
 
 ```
-POST   /aep/sessions                      → { sessionId, agentId, agentVersion, testMode, state, createdAt, expiresAt }
+POST   /aep/sessions                      → { sessionId, agentId, agentVersion, testMode, identity?, state, createdAt, expiresAt }
 GET    /aep/sessions/{sessionId}          → EvaluationSession
 POST   /aep/sessions/{sessionId}/evaluate → { resultRef }
 POST   /aep/sessions/{sessionId}/report   → { resultRef, sealed: true }
@@ -331,10 +388,13 @@ Request body for `POST /aep/sessions`:
 {
   "agentId": "string",
   "testMode": "graybox",
+  "identityId": "string",
   "injectedContext": { },
   "ttlSeconds": 900
 }
 ```
+
+`identityId` names the test identity the agent acts as for this session (§8.2). It is REQUIRED when the agent's *effective* binding for the requested `testMode` is `required`, OPTIONAL for `optional`, and MUST be absent for `none` (the default) — where the effective binding is `contextModel.identity.perMode[testMode]` when present, else `contextModel.identity.binding` (AEP-REQ-146). When bound, the response and the session record carry the resolved `identity` snapshot.
 
 For single-agent sessions, supply `agentId` and the server creates the session bound to that agent at its current version. `POST /aep/sessions` completes the `created → active` transition before returning, so successful responses return the active session summary rather than a bare allocation token. Composite sessions — where execution spans a graph of agents — are the subject of the Composite Session Evaluation (CSE) extension (§11.7). When CSE is supported, the request body MAY instead supply a `graph` field in place of `agentId`; servers MUST accept exactly one of `agentId` or `graph`.
 
@@ -384,6 +444,8 @@ All operations above are also callable via JSON-RPC 2.0 at `POST /aep/rpc`:
 | `aep.initialize` | (no REST equivalent; capability negotiation) |
 | `aep.agent.list` | `GET /aep/agents` |
 | `aep.agent.get` | `GET /aep/agents/{id}` |
+| `aep.identity.list` | `GET /aep/identities` |
+| `aep.identity.get` | `GET /aep/identities/{identityId}` |
 | `aep.session.start` | `POST /aep/sessions` |
 | `aep.session.get` | `GET /aep/sessions/{id}` |
 | `aep.turn.execute` | `POST /aep/sessions/{id}/turns` |
@@ -415,6 +477,8 @@ All operations above are also callable via JSON-RPC 2.0 at `POST /aep/rpc`:
 ```
 
 Response shape matches the REST endpoint (AEP-REQ-022): `{ agents, nextCursor, total }`.
+
+`aep.identity.list` likewise accepts the §7.1 identity filter, pagination, and `updatedSince` parameters in `params` and returns `{ identities, nextCursor, total }`; `aep.identity.get` takes `{ identityId }`.
 
 **AEP-REQ-030**: Servers MUST expose `aep.initialize` for capability negotiation. Subsequent JSON-RPC methods called before successful initialization return `-32011`.
 
@@ -471,6 +535,56 @@ The following types are reserved for standard meanings; custom types MUST use re
 - `history` — prior conversational turns
 - `environment` — locale, timezone, feature flags
 - `retrieval` — simulated retrieval results
+
+### 8.2 Test identities
+
+Context injection supplies the *content* an agent consumes. It does not answer a different question that product-embedded agents cannot avoid: **whom is the agent acting as?** An agent that reads a resource, checks a permission, or writes a record does so as some principal that the product's own authorization layer recognizes. A simulated `user` profile (`{ "role": "customer" }`) tells the agent how to talk to the user; it does not make the agent *be* anyone the product knows. Left unspecified, implementations fall back to an ambient default principal — exactly the hidden state AEP-REQ-038 and AEP-REQ-117 forbid — or evaluators are handed real accounts and credentials, which AEP-REQ-097 forbids.
+
+A **test identity** is a synthetic principal that the target (the organization operating the AEP server) establishes in its evaluation environment for exactly this purpose. The target owns the identity's existence, its roles, its tenancy, and whatever fixture data sits behind it; the evaluator discovers the identities it may use (§7.1) and names one at session start. Three things that are easy to conflate:
+
+| Concept | Carried by | Answers |
+|---------|-----------|---------|
+| Scenario `persona` | `scenario.schema.json` | How does the *simulated user* behave and what do they want? |
+| `user` injection point | `injectedContext` | What profile content does the agent see about the user? |
+| Test identity | `identityId` at session start | What principal does the agent *act as* against the product's authorization and data? |
+
+An agent may legitimately use all three in one session. A test identity is bound by reference because its substance is server-side state — accounts, memberships, seeded records — that cannot be posted in a request body and must not be fabricated by the client.
+
+A test identity is **applicable** to an agent when both hold: the target's declared applicability for the identity covers the agent, and the identity's `kind` is one the agent's contract accepts — any kind when `contextModel.identity.kinds` is absent, otherwise a member of that list. On the wire, applicability appears only as the per-caller `applicability` entries of AEP-REQ-141; the same definition decides the `agent` discovery filter (AEP-REQ-142) and the bind (AEP-REQ-148).
+
+**AEP-REQ-144**: Every test identity MUST conform to [`../schemas/test-identity.schema.json`](../schemas/test-identity.schema.json) and MUST be established by the target in the evaluation environment. A test identity MUST be synthetic: it MUST NOT be, be derived from, or share credentials with any real person's production account, and its document MUST NOT carry real personally identifiable information. Fixture data behind a test identity MUST satisfy the same constraint.
+
+**AEP-REQ-145**: No credential for a test identity crosses the AEP surface. `TestIdentity` documents, discovery responses, session records, Traces, and streaming events MUST NOT contain the identity's tokens, passwords, cookies, keys, or any other secret material, and servers MUST NOT issue the identity's product credentials to an evaluator through any AEP method. Binding is a server-side act: at session start the server establishes the acting principal itself, authorized by the *evaluator's* credential and the identity's declared applicability. Nothing in AEP conveys a test identity's credentials to an evaluator; whether the identity can be exercised outside AEP at all is a property of the target's deployment, which AEP-REQ-130 already requires to keep evaluation and production credentials audience-separated.
+
+**AEP-REQ-146**: `contextModel.identity` in an Agent Contract declares the agent's identity binding (`IdentityModel` in [`../schemas/test-identity.schema.json`](../schemas/test-identity.schema.json)). `binding` takes one of `none`, `optional`, or `required` and is the agent-wide default; an absent `contextModel.identity` means `none`. `perMode` MAY override it for individual live modes — keys are the five live modes, values the same three bindings — and a mode not listed inherits `binding`. The **effective binding** for a session is the value for its `testMode`, and every rule in this section that speaks of an agent's binding means the effective binding. `replay` is never a `perMode` key: a replay follows the Trace it replays (AEP-REQ-148 a, AEP-REQ-151). A `perMode` key naming a mode outside the agent's `evaluationModes` is a contract-validation error that servers MUST refuse at startup (as AEP-REQ-005), never silently ignored, so a typo cannot leave a mode unprotected. An agent whose turn behavior in a mode depends on an acting principal — authorization checks, per-principal data access, writes attributed to a user — MUST declare `optional` or `required` for that mode. An effective binding of `none` in a mode asserts that, *in that mode*, the agent's behavior is fully determined by its input and injected context. When no identity is bound to a session — always for `none`, by the evaluator's choice for `optional` — the agent runs with **no principal**: an operation that requires one MUST fail or be refused, that outcome MUST appear in the Trace, and the agent MUST NOT substitute an ambient or default principal. `optional` is therefore for agents that have a genuine principal-less path (an anonymous flow, or a synthetic path that touches no live state), not a way to defer the question to the runtime.
+
+Two shapes of agent need `perMode` (non-normative). One runs synthetically from injected context in the lower modes and calls the real system against live sandbox state only in `sandboxed-live`; it declares `binding: "none"` with `perMode: { "sandboxed-live": "required" }`. Another serves an anonymous public flow and an authenticated one from the same contract: `blackbox` probes the anonymous path with `none`, while `toolbox` and `sandboxed-live` exercise the authenticated path with `required`. In both, the contract rather than the runtime decides which sessions carry a principal.
+
+**AEP-REQ-147**: For every agent and every mode in which that agent's effective binding is `required`, the target MUST have established at least one test identity whose *declared* applicability covers that agent in that mode. This is a target-level obligation judged on the declaration, not on any caller's view: a caller whose per-caller `applicability` for the agent is empty receives `-32070` on bind or `-32071` on omission, which is an authorization outcome, not a conformance failure. An agent with `required` binding and no declared applicable identity is not evaluable, and a server that lists it is non-compliant.
+
+**AEP-REQ-148**: At `POST /aep/sessions` / `aep.session.start`, servers MUST evaluate the request in the following order and stop at the first failure, so that the error a caller receives never reveals the existence of a resource an earlier step hides: agent existence and authorization (`-32001`, AEP-REQ-028); agent mode support (`-32003`, AEP-REQ-040); then the identity checks below, in the order given, all before the `created → active` transition.
+  (a) `-32071 identity_binding_invalid` when `identityId` is supplied and the agent's effective binding for the requested `testMode` is `none`, or absent and it is `required`. This step needs no identity lookup and so discloses nothing about any identity. For `testMode: replay`, `identityId` is taken from the Trace being replayed: the caller MAY omit it; a supplied value that differs from the Trace's recorded `identityId`, or any value when the Trace recorded no identity, is `-32050 replay_integrity_violation`.
+  (b) `-32070 identity_not_found` when the identity does not exist or the caller is not authorized to bind it in any mode (existence-hiding, as AEP-REQ-143). This applies to re-execution replay too: a caller who can read a Trace but could not bind its identity cannot re-execute as it.
+  (c) `-32071 identity_binding_invalid` when the identity is not applicable to the agent (§8.2), when its `status` is `retired` (permanent, hence not retryable), or when, for a fresh session, the caller's `applicability` entry for this agent does not list the requested `testMode` in `authorizedModes`. For re-execution replay (AEP-REQ-151) only that last mode check is waived — `replay` is not a listable mode and is authorized by the Trace's captured mode under AEP-REQ-046 — while applicability and (b) apply unchanged.
+  (d) `-32072 identity_unavailable` when the identity exists, is applicable and authorized, but cannot be bound now — its `status` is `unavailable`, a fixture reset is in progress, or binding would exceed `maxConcurrentSessions`. `data.retryAfterMs` MUST be populated (AEP-REQ-080); a server that cannot estimate availability supplies its default backoff interval rather than omitting the field.
+
+**AEP-REQ-149**: A session's identity binding is fixed for the session's lifetime. Servers MUST resolve it during the `created → active` transition, MUST NOT change it mid-session, and MUST record the resolved **identity snapshot** in both the session record (`EvaluationSession.identity`) and the Trace (`Trace.identity`). The snapshot always carries `identityId`, `kind`, `boundAt`, and an `authorizationRef` — an opaque reference (AEP-REQ-126) to the audit record of the authorization decision that permitted the bind (AEP-REQ-153), so the Trace can be joined to *who* bound *what* without carrying the evaluator's credential or scope. It carries `tenancy`, `roles`, and the `fixture` reference including `version` and `digest` whenever the bound identity has them; an identity with no fixture produces a snapshot with no `fixture`. A re-execution replay is a new session with its own binding: its Trace carries a fresh `authorizationRef` and `boundAt`, and the replayed Trace's snapshot is never modified (AEP-REQ-044). The snapshot is how an identity-bound session satisfies AEP-REQ-117: the principal is influence-bearing state, and the Trace names it. It is visible in every evaluation mode (it is the evaluator's own choice, not agent internals), and under the Streaming extension it rides whole on the `session.started` event so the sealed Trace remains reconstructible from the stream alone (AEP-REQ-114).
+
+**AEP-REQ-150**: A test identity whose behavior depends on seeded state MUST declare a `fixture` with a `version` and a `resetPolicy`. `version` is an opaque identifier compared for equality only — no ordering is defined — and the target MUST change it whenever the fixture's content changes. A `fixture.digest`, when present, MUST be computed over a canonical serialization of the fixture state that the target defines and documents, so two values that agree describe the same state: on a `TestIdentity` it is the digest of the fixture at its declared `version` as last reset or verified; on an `IdentityBinding` snapshot it MUST be computed at bind time, after any per-session reset, so it describes the state the session actually started against. When `resetPolicy` is `per-session`, the server MUST restore the fixture to the declared `version` before each binding.
+
+  *Concurrency and release.* A binding holds one of the identity's `maxConcurrentSessions` slots (default 1) from the `created → active` transition until the session leaves `active` — by `aep.session.evaluate`, by `aep.session.abort`, or by expiry under AEP-REQ-011 — and the server MUST release the slot at that transition and audit-log the release (AEP-REQ-153). A client that crashes therefore holds a slot for at most the session TTL. Identities that share underlying state MUST carry the same `fixtureId`, and the concurrency limit is enforced per `fixtureId` across every identity that carries it.
+
+  *Isolation.* The fixture, not the tenant, is the isolation boundary: two identities in the same tenant with distinct `fixtureId`s MUST be isolated from each other's mutations, and a session's writes reaching another identity's fixture is cross-identity leakage, a critical defect in the sense of AEP-REQ-020.
+
+  *Mutation.* Fixture state may change only in `sandboxed-live`, the sole mode with real side effects (AEP-REQ-041). In every other mode the server MUST NOT apply a write the agent attempts against fixture state; the attempt is recorded in the Trace at the mode's visibility (as a tool call or policy event) and is evaluation evidence, not a mutation — so an agent that fails a "refuse writes" probe in `graybox` cannot corrupt a shared identity. An identity whose fixture has `resetPolicy: none` MUST NOT be applicable in `sandboxed-live`: the target's declared applicability MUST exclude that mode, and servers MUST validate this at startup (as AEP-REQ-005), because a mutation there would persist for every later session.
+
+**AEP-REQ-151**: Replay (§9, §11.4) comes in two forms and the identity rules apply to only one of them. *Trace-faithful playback* (AEP-REQ-059) re-reads the captured Trace without running the agent: it depends only on Trace authorization (AEP-REQ-046) and integrity (AEP-REQ-125), MUST NOT bind, resolve, or check the recorded identity, and MUST succeed even when that identity has since been retired or its fixture has moved — the snapshot on the Trace is the record being read. *Re-execution* (the Deterministic Replay extension, where the agent runs again against the Trace) MUST bind the `identityId` the Trace recorded, subject to AEP-REQ-148 (b) and the applicability half of (c) — the caller must still be authorized to bind that identity and it must still be applicable to the agent — with only the fresh-session mode check waived. The server MUST compare the identity's current `fixture.version` and `fixture.digest` with the Trace snapshot before executing turns. On mismatch the server MUST either restore the recorded fixture version or proceed with the EvaluationResult's `reproducibility.traceCompleteness` reporting the divergence; it MUST NOT claim byte-identical reproduction (AEP-REQ-063) across a fixture mismatch. Where the recorded identity has been retired, re-execution fails with `-32071` per AEP-REQ-148 (c); playback of the same Trace is unaffected.
+
+**AEP-REQ-152**: Evaluators MUST obtain `identityId` values from the identity discovery surface (§7.1), MUST bind an identity when the agent declares `required`, and MUST NOT supply principal credentials or identity material for a test identity through `injectedContext` or turn input. An evaluator that wants a principal with different roles or fixture data asks the target to establish one; AEP deliberately provides no method to create or alter identities (see §17).
+
+**AEP-REQ-153**: Every identity binding, binding rejection, binding release, and fixture reset MUST be audit-logged with session attribution and `identityId`, under the same tamper-evidence and retention rules as AEP-REQ-098 and AEP-REQ-099.
+
+Test identities are not a replacement for the `user` injection point and do not populate it. An agent that wants profile content about the acting user still declares a `user` injection point and the evaluator still supplies it; the server MAY validate that supplied content is consistent with the bound identity and reject with `-32040` when it is not, and MUST document whether it does so.
 
 ## 9. Evaluation Modes
 
@@ -594,7 +708,7 @@ The response is a Server-Sent Events (SSE) stream conforming to [WHATWG SSE](htt
 
 | Event type | Emitted when | Payload includes |
 |------------|--------------|------------------|
-| `session.started` | Session transitions `created → active` | `sessionId`, `agentId`, `agentVersion`, `testMode`, `startedAt` |
+| `session.started` | Session transitions `created → active` | `sessionId`, `agentId`, `agentVersion`, `testMode`, `startedAt`, `identity` (the full `IdentityBinding` snapshot when a test identity is bound, §8.2 — carried whole so AEP-REQ-114 holds) |
 | `turn.started` | Turn execution begins | `turnId`, `turnIndex`, `input`, `startedAt` |
 | `turn.reasoning` | Reasoning step exposed (per traceabilityContract) | `turnId`, `step`, `content` |
 | `tool.invoked` | Tool call dispatched (toolbox+ mode) | `turnId`, `toolCallId`, `toolName`, `arguments` |
@@ -828,6 +942,9 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 | -32050 | `replay_integrity_violation` | Replay | No |
 | -32060 | `agent_fault` | Agent | Limited retry |
 | -32061 | `agent_unavailable` | Agent | Yes with backoff |
+| -32070 | `identity_not_found` | Identity (existence-hiding) | No |
+| -32071 | `identity_binding_invalid` | Identity | No (fix binding) |
+| -32072 | `identity_unavailable` | Identity | Yes with backoff; honor `retryAfterMs` |
 
 ### 12.2 REST status code mapping
 
@@ -845,6 +962,9 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 | -32022 | 504 |
 | -32050 | 409 |
 | -32061 | 503 |
+| -32070 | 404 |
+| -32071 | 400 |
+| -32072 | 503 |
 
 ### 12.3 Retry obligations
 
@@ -902,6 +1022,8 @@ Production-environment detection SHOULD be policy-driven (configuration and depl
 **AEP-REQ-077**: Secrets MUST NOT appear in URLs, query strings, error messages, logs, traces, or findings.
 
 **AEP-REQ-097**: Real credentials MUST NOT be accepted as injected context, even in development environments.
+
+Test identities (§8.2) are the sanctioned answer to "but the agent has to act as *someone*": the server establishes the principal; no credential for it is ever issued to, or accepted from, an evaluator (AEP-REQ-145, AEP-REQ-152).
 
 ### 13.6 Audit logging
 
@@ -993,3 +1115,4 @@ The following are known design gaps carried to v0.2:
 4. Multi-agent coordination scenarios
 5. Cross-version replay semantics
 6. Sandbox fidelity verification hooks
+7. Test identity provisioning and fixture reset as protocol operations (v0.1 deliberately discovers identities the target established out of band; §8.2)

@@ -1,0 +1,18 @@
+{
+  "identityId": "eval.member-standard",
+  "kind": "user",
+  "displayName": "Standard member",
+  "applicability": [
+    {
+      "agentId": "example.inquiry-assistant",
+      "authorizedModes": [
+        "blackbox",
+        "graybox",
+        "policybox"
+      ]
+    }
+  ],
+  "status": "available",
+  "lastUpdatedAt": "2026-04-15T00:00:00Z",
+  "availableAt": "2026-04-15T00:05:00Z"
+}

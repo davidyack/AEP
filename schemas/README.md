@@ -11,6 +11,7 @@ Canonical JSON Schema (Draft 2020-12) definitions for AEP data models. These are
 | [`agent-descriptor.schema.json`](./agent-descriptor.schema.json) | Identity, risk tier, lifecycle, ownership. A subcomponent of the Agent Contract. |
 | [`capabilities-registry.schema.json`](./capabilities-registry.schema.json) | Declared domains, actions, modalities, quality claims, out-of-scope statements. |
 | [`context-bundle.schema.json`](./context-bundle.schema.json) | Evaluator-oriented curation: purpose, example tasks, boundaries, policy summary, tool descriptors. |
+| [`test-identity.schema.json`](./test-identity.schema.json) | **Required.** A synthetic principal the target established for evaluation, returned by `GET /aep/identities` (§7.1, §8.2). Kind, tenancy, roles, per-caller `applicability` (agent + authorized live modes), versioned fixture, availability. Carries no credentials by construction. Also defines `IdentityBinding`, the snapshot recorded on sessions and traces, and `IdentityModel`, the agent-side declaration (`binding` + `perMode`) shared by `AgentContract.contextModel.identity` and `AgentSummary.identityBinding`. |
 
 ## Tools and policy (optional extensions)
 
@@ -47,7 +48,7 @@ All schemas are Draft 2020-12. Validate with any compliant validator:
 npx ajv validate -s schemas/agent-contract.schema.json -d your-agent-contract.json --spec=draft2020
 ```
 
-Positive and negative fixtures for schema features live under [`tests/`](./tests/) (currently [`tests/capabilities-registry/`](./tests/capabilities-registry/) for the `extensionData` property).
+Positive and negative fixtures for schema features live under [`tests/`](./tests/): [`tests/capabilities-registry/`](./tests/capabilities-registry/) for the `extensionData` property and [`tests/test-identity/`](./tests/test-identity/) for `TestIdentity` documents and `IdentityBinding` snapshots.
 
 ## Stability
 

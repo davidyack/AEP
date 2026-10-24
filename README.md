@@ -25,12 +25,13 @@ AEP gives the agent a second door — an evaluation surface, separate from the u
 Required core (every compliant implementation):
 - **Agent Contract** every agent publishes: identity, input/output schemas, context model, capabilities
 - **Discovery with filtering, pagination, and incremental sync** — `GET /aep/agents` returns summaries with `authorizedModes`, filterable by domain, mode, extension, risk, and lifecycle
+- **Test identity discovery** — `GET /aep/identities` lists the synthetic principals the target established so an agent can act *as someone*; evaluators bind one at session start and never hold its credentials
 - **Five-state session lifecycle**: created → active → evaluated → reported → closed
 - **Equivalent REST and JSON-RPC surfaces** — REST for ergonomics, JSON-RPC for batching and negotiation
 - **Context injection** so tests are reproducible
 - **Execution model** specifying when scenarios complete and how scoring fires
 - **Trace production** for every session, sealed and replayable
-- **19 standardised error codes** with retry semantics
+- **21 standardised error codes** with retry semantics
 - **Enforced security model**: auth, authorization, rate limits, isolation
 - **Conformance declaration** at `/.well-known/aep-compliance.json`
 
@@ -55,6 +56,7 @@ aep/
 │   ├── agent-descriptor.schema.json         ← required
 │   ├── capabilities-registry.schema.json    ← required
 │   ├── context-bundle.schema.json           ← required
+│   ├── test-identity.schema.json            ← required
 │   ├── scenario.schema.json                 ← required
 │   ├── evaluation-session.schema.json       ← required
 │   ├── evaluation-result.schema.json        ← required

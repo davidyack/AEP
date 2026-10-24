@@ -14,7 +14,7 @@ Working document. Priorities reflect current understanding; order is a signal, n
 - Required traceability contract
 - Normative determinism and replay requirements
 - Red-teaming interface
-- 19 standardised error codes
+- 18 standardised error codes
 - Threat model, security model, scoring framing, replay framing, error handling
 
 ## v0.2 (next)
@@ -28,6 +28,8 @@ Working document. Priorities reflect current understanding; order is a signal, n
 4. **Cost attribution.** Scenarios have real cost (model calls, tool calls, time). The protocol should carry cost metadata so evaluators can set ceilings and account against budgets.
 
 5. **Sandbox fidelity contracts.** Tighten what `sandbox.fidelity` declarations guarantee, with verification hooks servers can expose.
+
+6. **Test identity provisioning and fixture reset.** v0.1 discovers the identities a target established out of band (spec §8.2) and deliberately offers no method to create, alter, or reset one. Evidence from CI adopters will show whether an on-demand reset or a scoped provisioning call belongs in the protocol or stays a deployment concern.
 
 ## v0.3 (probably)
 

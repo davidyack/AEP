@@ -43,6 +43,10 @@
       "$ref": "#/$defs/Evaluator",
       "description": "Who is running this session. MUST be authenticated."
     },
+    "identity": {
+      "$ref": "./test-identity.schema.json#/$defs/IdentityBinding",
+      "description": "Snapshot of the test identity the agent acts as, resolved at the created→active transition and fixed for the session (spec §8.2, AEP-REQ-149). Present when the session bound an identity. Distinct from 'evaluator' (who is running the evaluation) and from injectedContext.user (profile content)."
+    },
     "state": {
       "enum": ["created", "active", "evaluated", "reported", "closed", "aborted"],
       "description": "Current lifecycle state. Transitions MUST follow the lifecycle state machine in the normative spec."

@@ -1,0 +1,37 @@
+{
+  "identityId": "eval.member-standard",
+  "kind": "user",
+  "displayName": "Standard member",
+  "applicability": [
+    {
+      "agentId": "example.inquiry-assistant",
+      "authorizedModes": [
+        "blackbox",
+        "graybox",
+        "policybox"
+      ]
+    }
+  ],
+  "status": "available",
+  "lastUpdatedAt": "2026-04-15T00:00:00Z",
+  "description": "Member of one shared space with 40 seeded items; no admin rights.",
+  "tenancy": {
+    "tenantId": "eval-tenant-01",
+    "displayName": "Evaluation tenant"
+  },
+  "roles": [
+    "member"
+  ],
+  "attributes": {
+    "locale": "en-US",
+    "seniority": "mid"
+  },
+  "fixture": {
+    "fixtureId": "member-standard",
+    "version": "2026.04.3",
+    "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b",
+    "resetPolicy": "per-session",
+    "description": "One shared space, 40 items, two prior conversation threads."
+  },
+  "maxConcurrentSessions": 1
+}

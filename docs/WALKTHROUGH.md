@@ -64,6 +64,7 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
       "supportedModes": ["blackbox", "graybox", "policybox", "toolbox", "replay"],
       "authorizedModes": ["blackbox", "graybox", "policybox"],
       "supportedExtensions": ["policy-profile", "deterministic-replay"],
+      "identityBinding": { "binding": "required", "kinds": ["user", "com.example.external-reviewer"] },
       "lastUpdatedAt": "2026-04-15T00:00:00Z"
     }
   ],
@@ -91,6 +92,100 @@ curl "https://eval.example.com/aep/agents?updatedSince=2026-04-01T00:00:00Z"
 
 Pagination is cursor-based: use `nextCursor` from one response as `?cursor=` on the next.
 ```
+
+---
+
+## Step 1b — Discover the test identities you may act as
+
+The summary above carries `"identityBinding": { "binding": "required" }` with no per-mode overrides: the Inquiry Assistant reads the acting user's resources in every mode, so every session must act as a principal the product knows. Before starting a session you need to know which synthetic principals the target has established for it (spec §8.2):
+
+**REST**
+
+```bash
+curl -H "Authorization: Bearer $AEP_TOKEN" \
+     "https://eval.example.com/aep/identities?agent=example.inquiry-assistant&status=available"
+```
+
+**JSON-RPC**
+
+```json
+{ "jsonrpc": "2.0", "id": 2, "method": "aep.identity.list",
+  "params": { "agent": "example.inquiry-assistant", "status": "available" } }
+```
+
+**Response** (abridged; the full three-identity response is [`../examples/reference-agent/test-identities.json`](../examples/reference-agent/test-identities.json)):
+
+```json
+{
+  "identities": [
+    {
+      "identityId": "eval.member-standard",
+      "kind": "user",
+      "displayName": "Standard member",
+      "description": "Member of one shared space with 40 seeded items and two prior conversation threads; no admin rights.",
+      "tenancy": { "tenantId": "eval-tenant-01" },
+      "roles": ["member"],
+      "applicability": [
+        { "agentId": "example.inquiry-assistant", "authorizedModes": ["blackbox", "graybox", "policybox"] }
+      ],
+      "fixture": { "fixtureId": "member-standard", "version": "2026.04.3", "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b", "resetPolicy": "per-session" },
+      "maxConcurrentSessions": 1,
+      "status": "available",
+      "lastUpdatedAt": "2026-04-15T00:00:00Z"
+    }
+  ],
+  "nextCursor": null,
+  "total": 3
+}
+```
+
+Two things to notice. The response contains no token, password, or cookie: you will *name* this identity at session start and the server will act as it — you never hold its credentials (AEP-REQ-145). And `applicability` is computed *for you*: each entry is an agent you may bind this identity to, with the modes in which you may do so — the intersection of what the target configured for the identity, what the agent supports, and what your credential may do. That is why the entry lists the same three modes your Step 1 summary showed as `authorizedModes`; another evaluator with `toolbox` rights would see four. This identity holds one session at a time, with the seeded data restored before each session (`resetPolicy: per-session`), and the slot is released the moment the session leaves `active`, expiry included. `replay` is never listed — replaying a Trace that recorded this identity is governed by the Trace, not by this list.
+
+Only identities you are authorized to bind are listed. A server whose agents never act as a principal returns an empty list here, and its agents carry `identityBinding: { "binding": "none" }`.
+
+### Sidebar — agents with a per-mode split
+
+Many product-embedded agents are not like the Inquiry Assistant. Their lower-mode adapter runs synthetically against the injected context and reads no live state at all; only `sandboxed-live` calls the real agent against live sandbox state. For those, a principal matters in one mode and is meaningless in the rest, and the contract says so with a per-mode override (spec §8.2, AEP-REQ-146; the fragment is the fixture [`valid-identity-model-permode-split.json`](../schemas/tests/test-identity/valid-identity-model-permode-split.json)):
+
+```json
+"identity": {
+  "binding": "none",
+  "perMode": { "sandboxed-live": "required" },
+  "kinds": ["user"]
+}
+```
+
+A graybox session against such an agent binds nothing — supplying an `identityId` here is `-32071`, because the effective binding for `graybox` is `none`:
+
+```json
+{ "jsonrpc": "2.0", "id": 3, "method": "aep.session.start",
+  "params": { "agentId": "example.permode-split", "testMode": "graybox",
+              "injectedContext": { "user": { "role": "customer" } }, "ttlSeconds": 900 } }
+```
+
+```json
+{ "sessionId": "sess_q7r8s9", "agentId": "example.permode-split", "agentVersion": "2.0.0",
+  "testMode": "graybox", "state": "active", "createdAt": "2026-04-17T12:00:00Z", "expiresAt": "2026-04-17T12:15:00Z" }
+```
+
+A `sandboxed-live` session against the same agent must bind one — omitting `identityId` is `-32071` — so Step 1b comes first, filtered to the mode that needs it (`GET /aep/identities?agent=example.permode-split&mode=sandboxed-live`). The Inquiry Assistant's identities are not applicable here; this agent has its own, `eval.ops-sandbox`, established for it with a per-session fixture, and the start names it:
+
+```json
+{ "jsonrpc": "2.0", "id": 4, "method": "aep.session.start",
+  "params": { "agentId": "example.permode-split", "testMode": "sandboxed-live", "identityId": "eval.ops-sandbox",
+              "injectedContext": { "user": { "role": "customer" } }, "ttlSeconds": 900 } }
+```
+
+```json
+{ "sessionId": "sess_t1u2v3", "agentId": "example.permode-split", "agentVersion": "2.0.0",
+  "testMode": "sandboxed-live",
+  "identity": { "identityId": "eval.ops-sandbox", "kind": "user", "tenancy": { "tenantId": "eval-tenant-01" },
+                "roles": ["editor"], "fixture": { "fixtureId": "ops-sandbox", "version": "1" },
+                "authorizationRef": "mXk2Ltq9ZvR4bN7wPc1sYdHe", "boundAt": "2026-04-17T12:01:00Z" },
+  "state": "active", "createdAt": "2026-04-17T12:01:00Z", "expiresAt": "2026-04-17T12:16:00Z" }
+```
+
+Synthetic first, live second, and the contract — not the runtime — decides which sessions carry a principal. A `perMode` key for a mode the agent does not list in `evaluationModes` is a contract error the server refuses at startup, so a typo cannot leave a live mode unprotected. Replay is never a key: a replayed Trace carries its own answer.
 
 ---
 
@@ -152,7 +247,7 @@ You'll validate your inputs against `inputSchema` client-side before submission 
 
 ## Step 3 — Start a session
 
-Sessions bind a specific agent version and carry the injected context. You pick the evaluation mode based on what you need to observe — here we use `graybox`, which gives access to the Context Bundle but not tool calls or policy events.
+Sessions bind a specific agent version, the test identity the agent acts as, and the injected context. You pick the evaluation mode based on what you need to observe — here we use `graybox`, which gives access to the Context Bundle but not tool calls or policy events. Because the contract declares `contextModel.identity.binding: "required"` with no per-mode override, the effective binding for `graybox` is `required` and the request names one of the identities from Step 1b; the `user` injection point still carries the *profile content* the agent should see, which is a different thing from the principal it acts as.
 
 **REST**
 
@@ -162,6 +257,7 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
      -d '{
        "agentId": "example.inquiry-assistant",
        "testMode": "graybox",
+       "identityId": "eval.member-standard",
        "injectedContext": {
          "user": { "role": "product-manager", "tenureMonths": 18, "priorInteractions": 5 },
          "history": [],
@@ -179,6 +275,7 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
   "params": {
     "agentId": "example.inquiry-assistant",
     "testMode": "graybox",
+    "identityId": "eval.member-standard",
     "injectedContext": { "...": "..." },
     "ttlSeconds": 900
   }
@@ -193,13 +290,24 @@ curl -X POST -H "Authorization: Bearer $AEP_TOKEN" \
   "agentId": "example.inquiry-assistant",
   "agentVersion": "1.2.0",
   "testMode": "graybox",
+  "identity": {
+    "identityId": "eval.member-standard",
+    "kind": "user",
+    "tenancy": { "tenantId": "eval-tenant-01" },
+    "roles": ["member"],
+    "fixture": { "fixtureId": "member-standard", "version": "2026.04.3", "digest": "sha256:b49335c5fb0acf01aa7ee63cba8b6b3d67762668376824d2dee9c3ed8bb0ce2b" },
+    "authorizationRef": "Q3m9VZ2rXkT1pLwa8NfYhBsc",
+    "boundAt": "2026-04-17T12:00:00Z"
+  },
   "state": "active",
   "createdAt": "2026-04-17T12:00:00Z",
   "expiresAt": "2026-04-17T12:15:00Z"
 }
 ```
 
-The session is now `active`. Internally, the server created the session record, recorded the initial `created` state, and completed the `created -> active` transition before returning success. You can now run turns or scenarios.
+The session is now `active`. Internally, the server validated the identity binding (right agent, right mode, available), restored the `member-standard` fixture to version `2026.04.3`, established the acting principal, created the session record, recorded the initial `created` state, and completed the `created -> active` transition before returning success. The `identity` snapshot is fixed for the session and will appear on the Trace — it is how the principal, which influences every turn, stays visible to replay (AEP-REQ-149). Its `authorizationRef` points at the server's audit record of the decision that let *your* credential bind *this* identity; the Trace carries the pointer, never your token or scope. You can now run turns or scenarios.
+
+Had you omitted `identityId`, the server would have answered `-32071 identity_binding_invalid`; had you named an identity scoped to another agent, or a `service` identity where the contract's `kinds` lists only `user`, the same; had `eval.member-standard` been mid-reset or already held by another session, `-32072 identity_unavailable` with a `retryAfterMs`; had it been retired, `-32071` again, because that never clears. The checks run in a fixed order — agent, then identity existence, then binding shape, then availability — so the error you get never tells you whether something you were not allowed to see exists.
 
 ---
 
@@ -374,7 +482,7 @@ curl -H "Authorization: Bearer $AEP_TOKEN" \
      https://eval.example.com/aep/traces/trace_k1l2m3
 ```
 
-The Trace contains every turn's input and output, timestamps, the full injected context snapshot, and any tool calls or policy events appropriate to the session's mode. It is sealed and immutable.
+The Trace contains every turn's input and output, timestamps, the full injected context snapshot, the identity snapshot from Step 3 (including the fixture version and digest the session actually ran against), and any tool calls or policy events appropriate to the session's mode. It is sealed and immutable.
 
 ---
 
@@ -440,14 +548,15 @@ Eight HTTP requests for a complete evaluation. Six if you skip scenario and run 
 If you're building an AEP server, the minimum viable path through this walkthrough is:
 
 1. `GET /aep/agents/{id}` returning a valid Agent Contract
-2. `POST /aep/sessions` creating a session with injected context
-3. `POST /aep/sessions/{id}/turns` executing a single turn
-4. `POST /aep/sessions/{id}/evaluate` producing a result
-5. `GET /aep/results/{id}` returning an EvaluationResult
-6. `GET /aep/traces/{id}` returning a Trace
-7. `DELETE /aep/sessions/{id}` closing the session
+2. `GET /aep/identities` listing the test identities an agent may act as (an empty list is fine if none of your agents act as a principal)
+3. `POST /aep/sessions` creating a session with a bound identity and injected context
+4. `POST /aep/sessions/{id}/turns` executing a single turn
+5. `POST /aep/sessions/{id}/evaluate` producing a result
+6. `GET /aep/results/{id}` returning an EvaluationResult
+7. `GET /aep/traces/{id}` returning a Trace
+8. `DELETE /aep/sessions/{id}` closing the session
 
-If those seven endpoints work correctly — with auth, input validation, context injection, and mode enforcement — you have a functioning AEP-Server. Everything else in the spec is either making those seven endpoints richer (policy profiles, tool declarations, red-teaming) or making them more operable (rate limits, audit logs, error recovery).
+If those eight endpoints work correctly — with auth, input validation, context injection, and mode enforcement — you have a functioning AEP-Server. Everything else in the spec is either making those eight endpoints richer (policy profiles, tool declarations, red-teaming) or making them more operable (rate limits, audit logs, error recovery).
 
 ## Optional: stream events as they happen
 
