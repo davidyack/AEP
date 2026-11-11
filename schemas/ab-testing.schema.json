@@ -2,9 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aep.dev/schemas/ab-testing.schema.json",
   "title": "AbTesting",
-  "description": "Blind A/B model comparison extension (spec §11.10, extension id 'ab-testing'). The document root is the payload an agent publishes at CapabilitiesRegistry.extensionData['ab-testing'].payload: the opaque variant labels an evaluator may select, and a salted commitment to the label-to-configuration mapping. The real model or configuration behind a label is never part of this document or any other AEP surface (AEP-REQ-159). $defs/VariantBinding is the per-session snapshot carried on EvaluationSession.variant, Trace.variant, EvaluationResult.variant and the session.started stream event.",
+  "description": "Blind A/B model comparison extension (spec §11.10, extension id 'ab-testing'). The document root is the payload an agent publishes at CapabilitiesRegistry.extensionData['ab-testing'].payload: the opaque variant labels an evaluator may select. The real model or configuration behind a label is never part of this document or any other AEP surface (AEP-REQ-159). $defs/VariantBinding is the per-session snapshot carried on EvaluationSession.variant, Trace.variant, EvaluationResult.variant and the session.started stream event.",
   "type": "object",
-  "required": ["experimentId", "experimentVersion", "variants", "commitment"],
+  "required": [
+    "experimentId",
+    "experimentVersion",
+    "variants"
+  ],
   "properties": {
     "experimentId": {
       "$ref": "#/$defs/ExperimentId"
@@ -14,18 +18,20 @@
     },
     "variants": {
       "type": "array",
-      "items": {"$ref": "#/$defs/VariantLabel"},
+      "items": {
+        "$ref": "#/$defs/VariantLabel"
+      },
       "minItems": 2,
       "uniqueItems": true,
       "description": "The blinded labels an evaluator may request at session start, e.g. [\"A\", \"B\"]. Labels carry no description: anything describing a variant would leak which configuration it is (AEP-REQ-155)."
     },
     "selection": {
-      "enum": ["optional", "required"],
+      "enum": [
+        "optional",
+        "required"
+      ],
       "default": "optional",
       "description": "'required': every session against this agent MUST name a variant; a session start without one is refused with -32080. 'optional': a session without a variant runs the agent's ordinary configuration and is not part of the experiment."
-    },
-    "commitment": {
-      "$ref": "#/$defs/Commitment"
     }
   },
   "additionalProperties": false,
@@ -44,26 +50,31 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 64,
-      "description": "Opaque version of the label-to-configuration mapping. Changes whenever any assignment changes (AEP-REQ-158). Evaluators compare variants only within one experimentVersion (AEP-REQ-161)."
-    },
-    "Commitment": {
-      "type": "string",
-      "pattern": "^(sha256:[a-f0-9]{64}|sha384:[a-f0-9]{96}|sha512:[a-f0-9]{128})$",
-      "description": "Digest over the RFC 8785 (JCS) canonical bytes of the commitment preimage { experimentId, experimentVersion, assignments: { <label>: <configuration reference> }, salt } (AEP-REQ-160). The salt makes the digest useless for guessing the mapping from a list of candidate models; disclosing the preimage later, outside AEP, lets anyone verify the mapping was not changed after results were seen."
+      "description": "Opaque version of the label-to-configuration mapping. Changes whenever any assignment changes (AEP-REQ-158). Evaluators compare variants only within one experimentVersion (AEP-REQ-160)."
     },
     "VariantBinding": {
       "type": "object",
       "description": "Snapshot of the blinded variant a session ran against, resolved at the created→active transition and fixed for the session (AEP-REQ-157). Identical on the session record, the Trace, the EvaluationResult and the session.started stream event. Carries the label, never the configuration behind it.",
-      "required": ["experimentId", "experimentVersion", "label", "commitment", "boundAt"],
+      "required": [
+        "experimentId",
+        "experimentVersion",
+        "label",
+        "boundAt"
+      ],
       "properties": {
-        "experimentId": {"$ref": "#/$defs/ExperimentId"},
-        "experimentVersion": {"$ref": "#/$defs/ExperimentVersion"},
-        "label": {"$ref": "#/$defs/VariantLabel"},
-        "commitment": {
-          "$ref": "#/$defs/Commitment",
-          "description": "The commitment in force when the session bound, copied from the Agent Contract. Lets an auditor holding the disclosed preimage tie this exact session to the configuration it ran."
+        "experimentId": {
+          "$ref": "#/$defs/ExperimentId"
         },
-        "boundAt": {"type": "string", "format": "date-time"}
+        "experimentVersion": {
+          "$ref": "#/$defs/ExperimentVersion"
+        },
+        "label": {
+          "$ref": "#/$defs/VariantLabel"
+        },
+        "boundAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
       "additionalProperties": false
     }

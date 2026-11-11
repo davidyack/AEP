@@ -1,6 +1,6 @@
 # Blind A/B Model Comparison
 
-**Status:** Non-normative companion to spec §11.10 (extension id `ab-testing`). The requirements live in the spec (AEP-REQ-154 through AEP-REQ-163); this document explains how to use them.
+**Status:** Non-normative companion to spec §11.10 (extension id `ab-testing`). The requirements live in the spec (AEP-REQ-154 through AEP-REQ-162); this document explains how to use them.
 
 ## The problem
 
@@ -15,9 +15,8 @@ The extension solves both: one agent, one contract, a `variant` field at session
 
 | Who | Knows the mapping? | Does |
 |-----|-------------------|------|
-| **Operator** (runs the AEP server) | Yes | Configures which model each label maps to, publishes the commitment, decides when to unblind |
+| **Operator** (runs the AEP server) | Yes | Configures which model each label maps to, decides when to unblind |
 | **Evaluator** (tester, harness, grader) | No | Picks `A` or `B` per session, runs identical scenarios, compares results |
-| **Auditor** (optional) | After unblinding | Checks the disclosed mapping against the commitment recorded in every Trace |
 
 ## End-to-end
 
@@ -35,8 +34,7 @@ The agent's contract advertises the extension:
         "experimentId": "exp_7Qm2xR9kLp",
         "experimentVersion": "3",
         "variants": ["A", "B"],
-        "selection": "optional",
-        "commitment": "sha256:976a28aafa5289e08d28fe5977e432ebcc06f59771c8f509dab9416f688e73fb"
+        "selection": "optional"
       }
     }
   }
@@ -67,7 +65,6 @@ POST /aep/sessions
     "experimentId": "exp_7Qm2xR9kLp",
     "experimentVersion": "3",
     "label": "A",
-    "commitment": "sha256:976a28aa…",
     "boundAt": "2026-11-11T10:00:00Z"
   },
   "state": "active",
@@ -90,35 +87,17 @@ Every `EvaluationResult` carries the `variant` snapshot, so grouping is a filter
 group results by (variant.experimentId, variant.experimentVersion, variant.label)
 ```
 
-If `experimentVersion` changes partway through, stop. The mapping changed; results from before and after are not the same variant (AEP-REQ-161). Start a new comparison.
+If `experimentVersion` changes partway through, stop. The mapping changed; results from before and after are not the same variant (AEP-REQ-160). Start a new comparison.
 
 For preference judging (show a rater an A output next to a B output and ask which is better), randomize left/right placement per pair. The labels are already blind; the position shouldn't be a cue either.
 
 ### 5. Unblind (outside AEP)
 
-When the operator decides the comparison is over, they publish the commitment preimage through whatever channel they like (a report, a ticket, an email):
-
-```json
-{
-  "experimentId": "exp_7Qm2xR9kLp",
-  "experimentVersion": "3",
-  "assignments": {
-    "A": "provider-y/model-y-2026-09 temperature=0.2 prompt-rev=14",
-    "B": "provider-x/model-x-2026-03 temperature=0.2 prompt-rev=12"
-  },
-  "salt": "q8Zf0v3pX1nT7cKe9LmR2w"
-}
-```
-
-Anyone can canonicalize it with RFC 8785, hash it, and compare against the `commitment` in the contract and in every Trace. A match proves the operator didn't swap labels after seeing which one won.
+When the comparison is over, the operator decides whether and how to reveal which model each label was, through whatever channel they like (a report, a ticket, an email). The server's audit log records the configuration behind every binding (AEP-REQ-162), so the operator can answer from records rather than memory. No AEP method returns the mapping.
 
 ## Why the design looks like this
 
 **Why single letters?** Free-text labels drift into `gpt-ish`, `new`, `fast`, `control`. A one-character pattern keeps the schema itself enforcing opacity.
-
-**Why a commitment at all?** Blinding protects the evaluator from bias. The commitment protects the evaluator from the *operator*: without it, "A won, and A was model Y all along" can't be checked. With it, the claim can be verified.
-
-**Why salt?** A bare hash of `{A: "model-x", B: "model-y"}` can be brute-forced from the short list of plausible models. 128 bits of salt makes that infeasible.
 
 **Why no fallback under a label?** If B's provider has an outage and the server quietly serves B's sessions from A's model, the comparison is corrupted, and nobody can tell. Failing with `agent_unavailable` is visible; silent substitution is not (AEP-REQ-158).
 
@@ -146,7 +125,6 @@ The spec draws the line at "the protocol never tells you." Making the model *ung
 Server:
 - [ ] Advertise `ab-testing` at `aep.initialize` and in the conformance declaration
 - [ ] Publish a schema-valid `extensionData["ab-testing"]` entry for each agent with an experiment; refuse to start without it
-- [ ] Generate a fresh ≥128-bit salt and a new commitment for every `experimentVersion`; keep the preimage as long as the Traces
 - [ ] Assign labels to configurations at random per `experimentVersion`
 - [ ] Validate `variant` at session start after agent and mode checks; return `-32080` with `data.reason`
 - [ ] Resolve the binding at created→active and write the same snapshot to session, Trace, result, and `session.started`
@@ -160,4 +138,4 @@ Evaluator:
 - [ ] Hold mode, context, identity, scenarios, and seed constant across variants
 - [ ] Interleave variant sessions; randomize presentation order for preference judging
 - [ ] Group by (`experimentId`, `experimentVersion`, `label`); never pool across versions
-- [ ] Record the commitment alongside conclusions so they can be checked after unblinding
+- [ ] Record `experimentId` and `experimentVersion` alongside conclusions

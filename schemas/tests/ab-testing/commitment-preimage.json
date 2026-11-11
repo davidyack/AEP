@@ -1,9 +1,0 @@
-{
-  "experimentId": "exp_7Qm2xR9kLp",
-  "experimentVersion": "3",
-  "assignments": {
-    "A": "provider-y/model-y-2026-09 temperature=0.2 prompt-rev=14",
-    "B": "provider-x/model-x-2026-03 temperature=0.2 prompt-rev=12"
-  },
-  "salt": "q8Zf0v3pX1nT7cKe9LmR2w"
-}
