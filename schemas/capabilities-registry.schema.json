@@ -77,7 +77,7 @@
     },
     "ExtensionId": {
       "anyOf": [
-        {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse", "observability-correlation"]},
+        {"enum": ["policy-profile", "tool-capability", "red-teaming", "deterministic-replay", "streaming", "dataset", "cse", "observability-correlation", "ab-testing"]},
         {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}
       ],
       "description": "A registered AEP extension ID or a reverse-DNS vendor extension ID."

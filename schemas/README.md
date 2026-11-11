@@ -23,6 +23,7 @@ These schemas support [optional extensions](../spec/AEP-0.1.md#11-optional-exten
 | [`policy-profile.schema.json`](./policy-profile.schema.json) | **Optional.** Structured policy rules with conditions, actions, exceptions, severity. |
 | [`stream-event.schema.json`](./stream-event.schema.json) | **Optional.** Envelope and registered event types for the SSE streaming extension (§11.5). |
 | [`dataset.schema.json`](./dataset.schema.json) | **Optional.** Portable dataset format for agent evaluation (§11.6 Dataset extension). |
+| [`ab-testing.schema.json`](./ab-testing.schema.json) | **Optional.** Blinded variant labels and mapping commitment an agent publishes for A/B model comparison, plus the per-session `VariantBinding` snapshot (§11.10 Blind A/B Model Comparison extension). |
 
 ## Evaluation
 

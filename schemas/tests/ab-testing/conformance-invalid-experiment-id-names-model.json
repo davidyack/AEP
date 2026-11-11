@@ -1,0 +1,10 @@
+{
+  "experimentId": "modelx-vs-modely",
+  "experimentVersion": "3",
+  "variants": [
+    "A",
+    "B"
+  ],
+  "selection": "optional",
+  "commitment": "sha256:976a28aafa5289e08d28fe5977e432ebcc06f59771c8f509dab9416f688e73fb"
+}

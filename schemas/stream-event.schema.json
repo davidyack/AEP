@@ -61,6 +61,7 @@
             "agentVersion": {"type": "string"},
             "testMode": {"enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]},
             "identity": {"$ref": "./test-identity.schema.json#/$defs/IdentityBinding", "description": "Full identity snapshot when the session bound a test identity (spec §8.2, AEP-REQ-149) — the same object as Trace.identity, carried whole so the sealed Trace is reconstructible from the stream alone (AEP-REQ-114)."},
+            "variant": {"$ref": "./ab-testing.schema.json#/$defs/VariantBinding", "description": "Blinded variant snapshot when the session bound an ab-testing variant (§11.10, AEP-REQ-157) — the same object as Trace.variant, carried whole so the sealed Trace is reconstructible from the stream alone (AEP-REQ-114)."},
             "startedAt": {"type": "string", "format": "date-time"}
           }
         }

@@ -33,6 +33,7 @@ A compliant implementation of AEP is one that honors every requirement addressed
 - [`../docs/SCORING.md`](../docs/SCORING.md) — scoring concerns
 - [`../docs/REPLAY.md`](../docs/REPLAY.md) — replay design framing
 - [`../docs/WALKTHROUGH.md`](../docs/WALKTHROUGH.md) — happy-path end-to-end example
+- [`../docs/AB-TESTING.md`](../docs/AB-TESTING.md) — blind A/B model comparison companion
 
 ### 2.3 Out of scope
 - Agent implementation internals
@@ -108,6 +109,7 @@ Implementations MAY support the following; if they do, they MUST follow the rele
 - **Dataset** — portable dataset format for agent evaluation. §11.6 + [`../docs/DATASET.md`](../docs/DATASET.md)
 - **Composite Session Evaluation (CSE) hooks** — core hooks enabling multi-agent evaluation; full extension defined in [`../docs/CSE.md`](../docs/CSE.md). §11.7
 - **Observability Correlation** — correlate AEP agents and Traces with externally-collected telemetry (e.g. OpenTelemetry). §11.9
+- **Blind A/B model comparison** (`ab-testing.schema.json`) — evaluators select an opaque variant label (`A`, `B`, …) per session to compare underlying models without learning which is which. §11.10 + [`../docs/AB-TESTING.md`](../docs/AB-TESTING.md)
 
 Agents MUST declare which optional extensions they support in the Agent Contract's `capabilities` field. Evaluators MUST NOT assume extension support without verification. An extension may additionally publish versioned structured metadata through `capabilities.extensionData` (§5.1); the `capabilities.extensions` array remains the authoritative support declaration.
 
@@ -375,7 +377,7 @@ Note what is absent: there is no token, password, cookie, or session secret for 
 ### 7.2 Session (REST)
 
 ```
-POST   /aep/sessions                      → { sessionId, agentId, agentVersion, testMode, identity?, state, createdAt, expiresAt }
+POST   /aep/sessions                      → { sessionId, agentId, agentVersion, testMode, identity?, variant?, state, createdAt, expiresAt }
 GET    /aep/sessions/{sessionId}          → EvaluationSession
 POST   /aep/sessions/{sessionId}/evaluate → { resultRef }
 POST   /aep/sessions/{sessionId}/report   → { resultRef, sealed: true }
@@ -389,10 +391,13 @@ Request body for `POST /aep/sessions`:
   "agentId": "string",
   "testMode": "graybox",
   "identityId": "string",
+  "variant": "A",
   "injectedContext": { },
   "ttlSeconds": 900
 }
 ```
+
+`variant` names a blinded variant label for agents that advertise the `ab-testing` extension (§11.10). It MUST be absent for agents that do not; when present, the response and the session record carry the resolved `variant` snapshot, which names the label and never the model behind it.
 
 `identityId` names the test identity the agent acts as for this session (§8.2). It is REQUIRED when the agent's *effective* binding for the requested `testMode` is `required`, OPTIONAL for `optional`, and MUST be absent for `none` (the default) — where the effective binding is `contextModel.identity.perMode[testMode]` when present, else `contextModel.identity.binding` (AEP-REQ-146). When bound, the response and the session record carry the resolved `identity` snapshot.
 
@@ -708,7 +713,7 @@ The response is a Server-Sent Events (SSE) stream conforming to [WHATWG SSE](htt
 
 | Event type | Emitted when | Payload includes |
 |------------|--------------|------------------|
-| `session.started` | Session transitions `created → active` | `sessionId`, `agentId`, `agentVersion`, `testMode`, `startedAt`, `identity` (the full `IdentityBinding` snapshot when a test identity is bound, §8.2 — carried whole so AEP-REQ-114 holds) |
+| `session.started` | Session transitions `created → active` | `sessionId`, `agentId`, `agentVersion`, `testMode`, `startedAt`, `identity` (the full `IdentityBinding` snapshot when a test identity is bound, §8.2 — carried whole so AEP-REQ-114 holds), `variant` (the full `VariantBinding` snapshot when an ab-testing variant is bound, §11.10) |
 | `turn.started` | Turn execution begins | `turnId`, `turnIndex`, `input`, `startedAt` |
 | `turn.reasoning` | Reasoning step exposed (per traceabilityContract) | `turnId`, `step`, `content` |
 | `tool.invoked` | Tool call dispatched (toolbox+ mode) | `turnId`, `toolCallId`, `toolName`, `arguments` |
@@ -898,6 +903,72 @@ Servers supporting this extension MAY attach an `observability` object to the to
 
 **Non-goals.** This extension does not standardize a query API against the external telemetry backend — clients use that provider's own query surface (e.g. Application Insights KQL) with the advertised `attribute` / `matchPattern`. It also does not make the AEP Trace dependent on external data: the correlation identifiers recorded here are part of the Trace itself, while the external spans they reference remain outside AEP's record scope and are never required to interpret or replay a Trace, per §10.
 
+### 11.10 Blind A/B Model Comparison extension
+
+Teams changing the model behind an agent — a new provider, a new model generation, a cheaper tier, a fine-tune — want to know whether the change is better, and they want the people and graders judging it not to know which model they are looking at. Knowing that "B is the new flagship model" biases human raters and invites evaluators to tune scenarios toward an expected winner. This extension (extension id: `ab-testing`) lets an agent advertise that it can run under two or more **blinded variants**, lets an evaluator choose a variant per session by an opaque label (`A`, `B`, …), and guarantees that nothing on the AEP surface reveals which model a label stands for.
+
+A variant is an underlying configuration of the *same* agent: usually a model, but it MAY include anything the operator changes alongside it (model parameters, a system-prompt revision tuned for that model). The agent's `agentId`, Agent Contract, input/output schemas, context model, and evaluation modes are identical across variants — that is what makes the comparison meaningful. Comparing two different agents is not this extension; run them as two agents.
+
+The payload and the session snapshot are defined in [`../schemas/ab-testing.schema.json`](../schemas/ab-testing.schema.json). An agent advertises the extension through `capabilities.extensionData` (§5.1):
+
+```json
+"capabilities": {
+  "extensions": ["ab-testing"],
+  "extensionData": {
+    "ab-testing": {
+      "version": "1.0.0",
+      "payload": {
+        "experimentId": "exp_7Qm2xR9kLp",
+        "experimentVersion": "3",
+        "variants": ["A", "B"],
+        "selection": "optional",
+        "commitment": "sha256:976a28aafa5289e08d28fe5977e432ebcc06f59771c8f509dab9416f688e73fb"
+      }
+    }
+  }
+}
+```
+
+An evaluator starts a session with `"variant": "A"` (§7.2), runs the same scenarios in a second session with `"variant": "B"`, and compares the two results. Every session record, Trace, EvaluationResult, and `session.started` event of such a session carries the same `variant` snapshot:
+
+```json
+"variant": {
+  "experimentId": "exp_7Qm2xR9kLp",
+  "experimentVersion": "3",
+  "label": "A",
+  "commitment": "sha256:976a28aafa5289e08d28fe5977e432ebcc06f59771c8f509dab9416f688e73fb",
+  "boundAt": "2026-11-11T10:00:00Z"
+}
+```
+
+**AEP-REQ-154**: Servers claiming ab-testing support MUST advertise `"ab-testing"` in `capabilities.extensions` at initialization. Every agent that offers blinded variants MUST list `"ab-testing"` in its Agent Contract's `capabilities.extensions` and MUST publish a `capabilities.extensionData["ab-testing"]` entry whose `payload` conforms to [`../schemas/ab-testing.schema.json`](../schemas/ab-testing.schema.json). Unlike extensions in general (§5.1), advertising `ab-testing` without that entry is a contract-validation error that servers MUST refuse at startup (as AEP-REQ-005): the payload is the only place an evaluator can learn the labels and the commitment.
+
+**AEP-REQ-155**: Variant labels and experiment identifiers MUST be opaque. Labels are single uppercase letters (the schema enforces this). `experimentId` and `experimentVersion` MUST NOT encode or hint at a model name, provider, size, version, cost tier, or release date. Servers MUST NOT publish per-variant descriptions on any AEP surface, and SHOULD assign labels to configurations at random for each `experimentVersion`, so that conventions such as "A is the incumbent" do not leak through habit.
+
+**AEP-REQ-156**: Session start (`POST /aep/sessions`, `aep.session.start`) accepts an optional `variant` label. After the agent-existence and mode checks of §7.2 and §9 have passed — so that errors never reveal an agent or mode the caller cannot see — the server MUST refuse the request with `-32080 variant_invalid` when: `variant` is present but the agent does not advertise `ab-testing`; `variant` names a label not in the agent's current `variants`; or `variant` is absent while the payload's `selection` is `required`. `data.reason` carries one of `extension_not_supported`, `unknown_label`, or `variant_required`. When `selection` is `optional` and `variant` is absent, the session runs the agent's ordinary configuration, carries no `variant` snapshot, and is not part of the experiment.
+
+**AEP-REQ-157**: A session's variant binding is fixed for the session's lifetime. Servers MUST resolve it during the `created → active` transition together with `agentVersion`, MUST NOT change it mid-session, and MUST record the identical `VariantBinding` snapshot on the session record (`EvaluationSession.variant`), the Trace (`Trace.variant`), and the EvaluationResult (`EvaluationResult.variant`). The snapshot is visible in every evaluation mode — it is the evaluator's own choice, not agent internals. Under the Streaming extension it rides whole on the `session.started` event so the sealed Trace remains reconstructible from the stream alone (AEP-REQ-114).
+
+**AEP-REQ-158**: A label's mapping is stable for an `experimentVersion`. Every session bound to the same (`experimentId`, `experimentVersion`, `label`) MUST execute against the same underlying configuration. A server MUST NOT route one label to different models — for load balancing, canarying, or as a fallback when the configured model's provider fails; an upstream failure is reported as `-32061 agent_unavailable` (or `-32060 agent_fault`), never served by another model under the same label. Changing any assignment — including swapping two labels — MUST produce a new `experimentVersion` and a new `commitment`, and, because it materially changes agent behavior, a new Agent Contract `version` (AEP-REQ-140).
+
+**AEP-REQ-159**: Blinding. In a session bound to a variant, and in every Agent Contract, AgentSummary, and discovery response for an agent advertising `ab-testing`, no AEP surface may reveal which configuration a label stands for. This covers the contract and descriptor, session records, Traces, EvaluationResults, findings, stream events, error objects, the conformance declaration, and response headers, in every evaluation mode including `toolbox`, `sandboxed-live`, and `replay`. In particular:
+- (a) a `ModelCallRecord` attributable to the variant MUST record `model` as the token `variant:<label>` (e.g. `variant:A`). Model calls that are not part of the comparison MAY keep their real identifier only when that call is identical across every variant of the experiment, so it reveals nothing about the mapping;
+- (b) `ModelCallRecord.parameters`, Context Bundles, tool-call detail, and policy events MUST NOT carry model-identifying values such as deployment names, endpoint URLs, provider names, or model-specific parameter keys;
+- (c) error messages and `data` MUST NOT relay upstream provider error text that identifies a model or provider (this extends AEP-REQ-081);
+- (d) correlation identifiers under the Observability Correlation extension (§11.9) MAY be recorded, but the AEP surface MUST NOT carry the external span attributes they point to.
+
+The variant's *output* — what the model actually says — is evidence, not metadata, and is not altered by this requirement; see [`../docs/AB-TESTING.md`](../docs/AB-TESTING.md) for residual leakage through content, latency, and token counts.
+
+**AEP-REQ-160**: The `commitment` is a digest, computed as for AEP-REQ-124 (RFC 8785 canonicalization, then `sha256`, `sha384`, or `sha512`), over the preimage `{ "experimentId", "experimentVersion", "assignments": { "<label>": "<configuration reference>", … }, "salt" }`, where `assignments` maps every label in `variants` and `salt` is at least 128 bits from a cryptographically secure random source, fresh for every `experimentVersion`. The salt is what stops an evaluator from recovering the mapping by hashing candidate model names. Servers MUST retain the preimage for at least as long as any Trace carrying that commitment is retained (AEP-REQ-047). Disclosing the preimage ("unblinding") is an operator decision made outside AEP: no AEP method returns it, and no evaluator credential authorizes it.
+
+**AEP-REQ-161**: Evaluators MUST treat a label as meaningful only within one (`experimentId`, `experimentVersion`) pair. Sessions bound to the same label under different experiment versions MUST NOT be pooled as the same variant, and an evaluator that observes `experimentVersion` change mid-comparison MUST NOT combine results from before and after the change into one comparison. Evaluators comparing variants SHOULD hold every other session input constant — `testMode`, `injectedContext`, `identityId`, scenarios, and `seed` where the agent is seeded — and SHOULD interleave or randomize the order in which variant sessions run.
+
+**AEP-REQ-162**: Replay. Trace-faithful playback (AEP-REQ-059) reads the Trace's `variant` snapshot and never consults the current mapping. A re-execution replay (§11.4) of a variant-bound Trace MUST bind the same label under the same `experimentVersion`; when that version is no longer served, the server MUST refuse with `-32081 variant_retired` and MUST NOT silently re-execute under the current mapping. A re-execution is a new session with its own `boundAt`; the replayed Trace's snapshot is never modified (AEP-REQ-044).
+
+**AEP-REQ-163**: Servers MUST record each variant binding — session, evaluator, agent, label, `experimentVersion`, and the configuration actually executed — in the audit log (AEP-REQ-098). Audit records that name the configuration are operator data: they MUST NOT be readable with evaluator credentials or through any AEP method.
+
+**Non-goals.** This extension does not run the statistics: choosing sample sizes, significance tests, and preference-judging protocols is the evaluator's business (see [`../docs/AB-TESTING.md`](../docs/AB-TESTING.md) and [`../docs/SCORING.md`](../docs/SCORING.md)). It does not offer server-side random assignment of variants to sessions, a protocol operation for unblinding, or comparisons across different agents. It also does not promise that a determined evaluator cannot guess a model from its output style; it promises that the protocol never tells them.
+
 ## 12. Error Handling
 
 AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent information as HTTP status codes with a JSON body of the same shape.
@@ -945,6 +1016,8 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 | -32070 | `identity_not_found` | Identity (existence-hiding) | No |
 | -32071 | `identity_binding_invalid` | Identity | No (fix binding) |
 | -32072 | `identity_unavailable` | Identity | Yes with backoff; honor `retryAfterMs` |
+| -32080 | `variant_invalid` | Variant (§11.10) | No (fix request) |
+| -32081 | `variant_retired` | Variant (§11.10) | No |
 
 ### 12.2 REST status code mapping
 
@@ -965,6 +1038,8 @@ AEP errors use JSON-RPC 2.0 error-object form. REST endpoints return equivalent 
 | -32070 | 404 |
 | -32071 | 400 |
 | -32072 | 503 |
+| -32080 | 400 |
+| -32081 | 409 |
 
 ### 12.3 Retry obligations
 
