@@ -68,6 +68,10 @@
       "$ref": "./test-identity.schema.json#/$defs/IdentityBinding",
       "description": "Snapshot of the test identity bound to the session, including fixture version/digest (spec §8.2, AEP-REQ-149). Present when the session bound an identity; replay rebinds the same identityId and compares the fixture (AEP-REQ-151). Carries no credentials."
     },
+    "variant": {
+      "$ref": "./ab-testing.schema.json#/$defs/VariantBinding",
+      "description": "Optional (§11.10 ab-testing extension). The same blinded variant snapshot as EvaluationSession.variant (AEP-REQ-157). When present, nothing else in the Trace may reveal the configuration behind the label (AEP-REQ-159)."
+    },
     "seed": {
       "type": "string",
       "description": "Random seed used, when the agent declares 'seeded' determinism."
@@ -213,7 +217,7 @@
       "required": ["modelCallId", "model"],
       "properties": {
         "modelCallId": {"type": "string"},
-        "model": {"type": "string"},
+        "model": {"type": "string", "description": "Model identifier. In a session bound to an ab-testing variant (§11.10), calls attributable to the variant MUST record the blinded token 'variant:<label>' (e.g. 'variant:A'), never the real model (AEP-REQ-159)."},
         "promptDigest": {"type": "string"},
         "prompt": {"type": "string", "description": "Full prompt text. Present only when traceabilityContract.modelCalls is 'full'."},
         "responseDigest": {"type": "string"},

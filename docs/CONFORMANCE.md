@@ -245,6 +245,20 @@ These are the core hooks that enable the CSE extension. The full extension is de
 | AEP-REQ-132 | Populate Trace.observability before sealing when telemetry was collected; absence is valid, not an error |
 | AEP-REQ-133 | With streaming, observability content rides in registered events so Trace reconstruction stays lossless |
 
+### Blind A/B Model Comparison (§11.10)
+
+| ID | Summary |
+|----|---------|
+| AEP-REQ-154 | Advertise "ab-testing"; agents offering variants publish a schema-valid `extensionData["ab-testing"]` entry; advertising without it is refused at startup |
+| AEP-REQ-155 | Labels are single uppercase letters; experimentId/experimentVersion encode no model hints; no per-variant descriptions; labels SHOULD be assigned at random |
+| AEP-REQ-156 | Check `variant` at session start after agent/mode checks; `-32080` for unsupported extension, unknown label, or missing label when `selection: required` |
+| AEP-REQ-157 | Binding fixed at created→active; identical `VariantBinding` on session, Trace, EvaluationResult, and `session.started` |
+| AEP-REQ-158 | One configuration per (experimentId, experimentVersion, label); no load balancing or fallback under a label; any reassignment bumps experimentVersion and agent version |
+| AEP-REQ-159 | No AEP surface reveals the configuration behind a label: `ModelCallRecord.model` is `variant:<label>`; no model-identifying parameters, provider error text, or headers |
+| AEP-REQ-160 | (Evaluator) Compare labels only within one experimentVersion; never pool across versions |
+| AEP-REQ-161 | Playback reads the snapshot; re-execution binds the same label and version or fails `-32081` |
+| AEP-REQ-162 | Audit-log every binding with the executed configuration; never readable with evaluator credentials |
+
 ## Declaring conformance
 
 Publish a declaration at `/.well-known/aep-compliance.json` (AEP-REQ-107):

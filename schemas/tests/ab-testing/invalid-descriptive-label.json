@@ -1,0 +1,9 @@
+{
+  "experimentId": "exp_7Qm2xR9kLp",
+  "experimentVersion": "3",
+  "variants": [
+    "fast",
+    "smart"
+  ],
+  "selection": "optional"
+}

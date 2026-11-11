@@ -1,0 +1,9 @@
+{
+  "experimentId": "modelx-vs-modely",
+  "experimentVersion": "3",
+  "variants": [
+    "A",
+    "B"
+  ],
+  "selection": "optional"
+}

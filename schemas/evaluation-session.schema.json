@@ -47,6 +47,10 @@
       "$ref": "./test-identity.schema.json#/$defs/IdentityBinding",
       "description": "Snapshot of the test identity the agent acts as, resolved at the created→active transition and fixed for the session (spec §8.2, AEP-REQ-149). Present when the session bound an identity. Distinct from 'evaluator' (who is running the evaluation) and from injectedContext.user (profile content)."
     },
+    "variant": {
+      "$ref": "./ab-testing.schema.json#/$defs/VariantBinding",
+      "description": "Optional (§11.10 ab-testing extension). The blinded variant this session runs against, resolved at the created→active transition and fixed for the session (AEP-REQ-157). Carries the label only; the configuration behind it never appears on any AEP surface (AEP-REQ-159). Absent when the session named no variant."
+    },
     "state": {
       "enum": ["created", "active", "evaluated", "reported", "closed", "aborted"],
       "description": "Current lifecycle state. Transitions MUST follow the lifecycle state machine in the normative spec."

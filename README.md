@@ -31,7 +31,7 @@ Required core (every compliant implementation):
 - **Context injection** so tests are reproducible
 - **Execution model** specifying when scenarios complete and how scoring fires
 - **Trace production** for every session, sealed and replayable
-- **21 standardised error codes** with retry semantics
+- **23 standardised error codes** with retry semantics
 - **Enforced security model**: auth, authorization, rate limits, isolation
 - **Conformance declaration** at `/.well-known/aep-compliance.json`
 
@@ -40,6 +40,7 @@ Optional extensions (implement if you need them):
 - **Tool Capability** — structured tool descriptors
 - **Red-teaming** — adversarial testing interface
 - **Deterministic replay** — byte-identical reproduction
+- **Blind A/B model comparison** — run sessions against variant `A` or `B` to compare underlying models without the evaluator ever learning which model is which
 
 Every MUST in the spec carries an `AEP-REQ-NNN` identifier; a future conformance test suite will reference these directly.
 
@@ -65,7 +66,8 @@ aep/
 │   ├── policy-profile.schema.json           ← optional extension
 │   ├── tool-capability.schema.json          ← optional extension
 │   ├── stream-event.schema.json             ← optional extension
-│   └── dataset.schema.json                  ← optional extension
+│   ├── dataset.schema.json                  ← optional extension
+│   └── ab-testing.schema.json               ← optional extension
 ├── patterns/
 │   ├── PATTERNS.md          # Pattern language (non-normative)
 │   └── TEST-MODES.md        # Six-mode taxonomy (portable)
@@ -81,6 +83,7 @@ aep/
 │   ├── CSE.md               # Composite Session Evaluation extension
 │   ├── OPERATION-CONTEXT.md # Operation Context Resolution extension (draft proposal)
 │   ├── OPENINFERENCE.md     # OpenInference Trace Projection extension (draft proposal)
+│   ├── AB-TESTING.md        # Blind A/B model comparison extension companion
 │   └── ROADMAP.md
 ├── examples/
 │   └── reference-agent/     # Fictional agent with full contract and scenarios

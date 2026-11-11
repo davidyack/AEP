@@ -29,6 +29,10 @@
     "testMode": {
       "enum": ["blackbox", "graybox", "policybox", "toolbox", "sandboxed-live", "replay"]
     },
+    "variant": {
+      "$ref": "./ab-testing.schema.json#/$defs/VariantBinding",
+      "description": "Optional (§11.10 ab-testing extension). Copied from Trace.variant so results can be grouped by blinded label without fetching the Trace (AEP-REQ-157)."
+    },
     "scores": {
       "$ref": "#/$defs/ScoreSet",
       "description": "Scores across canonical dimensions. All present dimensions MUST follow the DimensionScore shape; implementations MAY add vendor-specific dimensions using reverse-DNS prefixes."

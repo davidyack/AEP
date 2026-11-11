@@ -36,6 +36,14 @@ Optional: `policy-profile`, `tool-capability`, `stream-event`, `dataset`.
 
 ## [Unreleased]
 
+### Blind A/B Model Comparison extension
+
+- Added optional **Blind A/B Model Comparison extension** (§11.10, extension id `ab-testing`). An agent advertises two or more blinded variants (`A`, `B`, …) of its underlying model configuration through `capabilities.extensionData["ab-testing"]`; an evaluator names one with the new optional `variant` field on `POST /aep/sessions` / `aep.session.start` and compares results across sessions without ever learning which model a label stands for.
+- New schema [`ab-testing.schema.json`](../schemas/ab-testing.schema.json): the extension payload (`experimentId`, `experimentVersion`, `variants`, `selection`) and `$defs/VariantBinding`, carried on the new optional `variant` property of `EvaluationSession`, `Trace`, `EvaluationResult`, and the `session.started` stream event. `ab-testing` added to the registered `ExtensionId` values. Fixtures under `schemas/tests/ab-testing/`.
+- Blinding is normative across every AEP surface and mode: `ModelCallRecord.model` records `variant:<label>`, and parameters, error text, and headers may not identify the model. A label maps to exactly one configuration per `experimentVersion` — no load balancing or provider fallback under a label. Unblinding is an operator decision outside AEP.
+- New error codes `-32080 variant_invalid` (400) and `-32081 variant_retired` (409).
+- Requirements AEP-REQ-154 through AEP-REQ-162. Purely additive (AEP-REQ-105, no version bump). Companion: [`../docs/AB-TESTING.md`](../docs/AB-TESTING.md).
+
 ### Test identities
 
 - Added **test identities** (§8.2): synthetic principals the target establishes in its evaluation environment so a product-embedded agent can act *as someone* the product's authorization layer recognizes, without an ambient default principal (AEP-REQ-038/117) and without real accounts or credentials reaching an evaluator (AEP-REQ-097). Evaluators discover identities and bind one by `identityId` at session start; they never create them and never hold their credentials — the server establishes the acting principal under the evaluator's own authorization.
